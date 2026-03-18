@@ -1,226 +1,145 @@
 import { useEffect, useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { ExternalLink, Heart, MapPin, Navigation, Popcorn } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MapPin, Star, ExternalLink } from 'lucide-react';
-import { supabase, type Theater } from '@/lib/supabase';
-import { getTheaterChainColor, getTheaterChainBorderColor } from '@/lib/theater-colors';
-import { calculateDistance, formatDistance, getMockLocation } from '@/lib/geolocation';
+import { Card, CardContent } from '@/components/ui/card';
+import { listTheatersWithMeta, toggleFavoriteTheater, type TheaterWithMeta } from '@/lib/app-data';
+import { formatDistance } from '@/lib/geolocation';
+import { getTheaterChainBorderColor, getTheaterChainColor } from '@/lib/theater-colors';
+import { useUserLocation } from '@/hooks/useUserLocation';
 
-type TheaterWithDistance = Theater & {
-  distance: number;
-  isFavorite: boolean;
-};
-
-export function Theaters() {
-  const [theaters, setTheaters] = useState<TheaterWithDistance[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-
-  useEffect(() => {
-    const location = getMockLocation();
-    setUserLocation(location);
-    loadTheaters();
-  }, []);
-
-  const loadTheaters = async () => {
-    try {
-      const userLocation = getMockLocation();
-
-      const { data: theatersData, error: theatersError } = await supabase
-        .from('theaters')
-        .select('*');
-
-      if (theatersError) throw theatersError;
-
-      const { data: favoritesData } = await supabase
-        .from('user_favorite_theaters')
-        .select('theater_id');
-
-      const favoriteIds = new Set(
-        favoritesData?.map((f) => f.theater_id) || []
-      );
-
-      const theatersWithDistance = (theatersData || []).map((theater) => ({
-        ...theater,
-        distance: calculateDistance(userLocation, {
-          latitude: theater.latitude,
-          longitude: theater.longitude,
-        }),
-        isFavorite: favoriteIds.has(theater.id),
-      }));
-
-      theatersWithDistance.sort((a, b) => a.distance - b.distance);
-
-      setTheaters(theatersWithDistance);
-    } catch (error) {
-      console.error('Error loading theaters:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const toggleFavorite = async (theaterId: string, isFavorite: boolean) => {
-    try {
-      if (isFavorite) {
-        await supabase
-          .from('user_favorite_theaters')
-          .delete()
-          .eq('theater_id', theaterId);
-      } else {
-        await supabase
-          .from('user_favorite_theaters')
-          .insert({ theater_id: theaterId });
-      }
-
-      setTheaters((prev) =>
-        prev.map((t) =>
-          t.id === theaterId ? { ...t, isFavorite: !isFavorite } : t
-        )
-      );
-    } catch (error) {
-      console.error('Error toggling favorite:', error);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="text-slate-600">読み込み中...</div>
-      </div>
-    );
+function formatShowtime(showtime: string | null) {
+  if (!showtime) {
+    return '本日の上映なし';
   }
 
-  const getMapUrl = () => {
-    if (!userLocation || theaters.length === 0) return '';
+  return new Date(showtime).toLocaleTimeString('ja-JP', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
-    const query = [
-      `${userLocation.latitude},${userLocation.longitude}`,
-      ...theaters.map(t => `${t.latitude},${t.longitude}`)
-    ].join('/');
+export function Theaters() {
+  const { location } = useUserLocation();
+  const [theaters, setTheaters] = useState<TheaterWithMeta[]>([]);
+  const [loading, setLoading] = useState(true);
 
-    return `https://www.google.co.jp/maps/dir/${query}`;
+  useEffect(() => {
+    let cancelled = false;
+
+    setLoading(true);
+    listTheatersWithMeta(location)
+      .then((items) => {
+        if (!cancelled) {
+          setTheaters(items);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [location]);
+
+  const handleToggleFavorite = (theaterId: string) => {
+    const next = new Set(toggleFavoriteTheater(theaterId));
+    setTheaters((current) =>
+      current.map((theater) => ({
+        ...theater,
+        isFavorite: next.has(theater.id),
+      }))
+    );
   };
 
   return (
-    <div className="space-y-4">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">劇場マップ</h2>
-        <p className="text-slate-600">
-          現在地から近い順に表示 / タップでマイシアターに登録
+    <div className="space-y-6">
+      <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+        <h2 className="text-2xl font-bold text-slate-900">近くの映画館</h2>
+        <p className="text-sm text-slate-600">
+          現在地からの距離順で並べています。お気に入りに入れるとタイムラインに反映されます。
         </p>
-      </div>
+      </section>
 
-      {theaters.length === 0 ? (
-        <div className="text-center py-12 text-slate-500">
-          劇場データがありません
+      {loading ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-500">
+          映画館情報を読み込み中です。
         </div>
       ) : (
-        <>
-          {userLocation && (
-            <Card className="mb-6 overflow-hidden">
-              <CardContent className="p-0">
-                <div className="relative w-full h-96">
-                  <iframe
-                    src={`https://www.google.co.jp/maps?q=${userLocation.latitude},${userLocation.longitude}&z=12&output=embed`}
-                    width="100%"
-                    height="100%"
-                    style={{ border: 0 }}
-                    allowFullScreen
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                    title="劇場マップ"
-                  />
-                </div>
-                <div className="p-4 bg-slate-50 border-t">
-                  <a
-                    href={getMapUrl()}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    Google Mapsで全ての劇場を見る
-                  </a>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+        <div className="space-y-4">
+          {theaters.map((theater) => {
+            const mapUrl = `https://www.google.com/maps/search/?api=1&query=${theater.latitude},${theater.longitude}`;
 
-          <div className="space-y-3">
-            {theaters.map((theater) => {
-              const colorClass = getTheaterChainColor(theater.chain);
-              const borderClass = getTheaterChainBorderColor(theater.chain);
-              const theaterMapUrl = `https://www.google.co.jp/maps/?q=${theater.latitude},${theater.longitude}`;
-
-              return (
-                <Card
-                  key={theater.id}
-                  className={`border-l-4 ${borderClass} ${
-                    theater.isFavorite ? 'bg-slate-50' : ''
-                  } hover:shadow-md transition-shadow`}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Badge className={`${colorClass} text-white`}>
-                            {theater.chain}
+            return (
+              <Card
+                key={theater.id}
+                className={`overflow-hidden border-l-4 ${getTheaterChainBorderColor(
+                  theater.chain
+                )}`}
+              >
+                <CardContent className="p-4">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className={`${getTheaterChainColor(theater.chain)} text-white`}>
+                          {theater.chain}
+                        </Badge>
+                        <h3 className="text-xl font-semibold text-slate-900">{theater.name}</h3>
+                        {theater.isFavorite ? (
+                          <Badge variant="outline" className="border-rose-200 text-rose-600">
+                            お気に入り
                           </Badge>
-                          <span className="font-semibold text-slate-900 text-lg">
-                            {theater.name}
-                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="grid gap-2 text-sm text-slate-600 md:grid-cols-3">
+                        <div className="flex items-center gap-2">
+                          <Navigation className="h-4 w-4 text-slate-400" />
+                          <span>{formatDistance(theater.distance)}</span>
                         </div>
-                        <div className="space-y-1 text-sm text-slate-600">
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4 flex-shrink-0" />
-                            <span className="truncate">{theater.address}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-slate-500">現在地から</span>
-                            <span className="font-semibold text-slate-900">
-                              {formatDistance(theater.distance)}
-                            </span>
-                          </div>
-                          <a
-                            href={theaterMapUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs"
-                          >
-                            <MapPin className="w-3 h-3" />
-                            地図で見る
-                          </a>
+                        <div className="flex items-center gap-2">
+                          <Popcorn className="h-4 w-4 text-slate-400" />
+                          <span>{theater.movieCount}作品を上映中</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span>次回 {formatShowtime(theater.nextShowtime)}</span>
                         </div>
                       </div>
-                      <div className="flex flex-col gap-2">
-                        <Button
-                          variant={theater.isFavorite ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => toggleFavorite(theater.id, theater.isFavorite)}
-                          className={
-                            theater.isFavorite
-                              ? 'bg-slate-900 hover:bg-slate-700'
-                              : ''
-                          }
-                        >
-                          <Star
-                            className={`w-4 h-4 ${
-                              theater.isFavorite ? 'fill-current' : ''
-                            }`}
-                          />
-                          <span className="ml-1">
-                            {theater.isFavorite ? '登録済み' : '登録'}
-                          </span>
-                        </Button>
+
+                      <div className="flex items-start gap-2 text-sm text-slate-600">
+                        <MapPin className="mt-0.5 h-4 w-4 flex-none text-slate-400" />
+                        <span>{theater.address}</span>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant={theater.isFavorite ? 'default' : 'outline'}
+                        onClick={() => handleToggleFavorite(theater.id)}
+                      >
+                        <Heart
+                          className={`mr-2 h-4 w-4 ${
+                            theater.isFavorite ? 'fill-current' : ''
+                          }`}
+                        />
+                        {theater.isFavorite ? 'お気に入り解除' : 'お気に入り追加'}
+                      </Button>
+                      <Button asChild variant="outline">
+                        <a href={mapUrl} target="_blank" rel="noreferrer">
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          地図で開く
+                        </a>
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       )}
     </div>
   );

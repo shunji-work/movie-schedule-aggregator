@@ -1,0 +1,50 @@
+{
+  "status": "0",
+  "data": [
+    {
+      "vitCd": "009",
+      "list": [
+        {
+          "code": "009",
+          "name": "ＴＯＨＯシネマズ六本木ヒルズ",
+          "list": [
+            {
+              "code": "027888",
+              "name": "ゴールデンカムイ　網走監獄襲撃編",
+              "ename": "GOLDEN KAMUY THE ABASHIRI PRISON RAID",
+              "hours": 122,
+              "ratingCd": "01",
+              "newShow": "1",
+              "list": [
+                {
+                  "code": "22",
+                  "name": "スクリーン２",
+                  "list": [
+                    {
+                      "showingStart": "11:40",
+                      "showingEnd": "14:00",
+                      "bgColor": "",
+                      "eventIcon": "",
+                      "code": 2,
+                      "unsoldSeatInfo": {
+                        "unsoldSeatStatus": "A"
+                      }
+                    },
+                    {
+                      "showingStart": "",
+                      "showingEnd": "",
+                      "bgColor": "",
+                      "eventIcon": "",
+                      "code": 0,
+                      "unsoldSeatInfo": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

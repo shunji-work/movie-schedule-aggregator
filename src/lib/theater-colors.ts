@@ -1,63 +1,59 @@
 export const getTheaterChainColor = (chain: string): string => {
-  const chainLower = chain.toLowerCase();
+  const normalized = chain.toLowerCase();
 
-  if (chainLower.includes('toho') || chainLower.includes('tohoシネマズ')) {
+  if (normalized.includes('toho')) {
     return 'bg-red-600';
   }
 
-  if (chainLower.includes('ユナイテッド') || chainLower.includes('united')) {
+  if (normalized.includes('united')) {
     return 'bg-orange-500';
   }
 
-  if (chainLower.includes('109') || chainLower.includes('シネマズ109')) {
-    return 'bg-yellow-400';
+  if (normalized.includes('109')) {
+    return 'bg-amber-500';
   }
 
-  if (chainLower.includes('イオン') || chainLower.includes('aeon')) {
-    return 'bg-pink-700';
+  if (normalized.includes('aeon')) {
+    return 'bg-pink-600';
   }
 
-  if (chainLower.includes('movix') || chainLower.includes('ピカデリー') || chainLower.includes('picadilly')) {
-    return 'bg-blue-500';
+  if (normalized.includes('movix') || normalized.includes('piccadilly')) {
+    return 'bg-blue-600';
   }
 
-  if (chainLower.includes('humax') || chainLower.includes('ヒューマックス')) {
-    return 'bg-green-600';
+  if (normalized.includes('humax')) {
+    return 'bg-emerald-600';
   }
 
-  return 'bg-gray-500';
-};
-
-export const getTheaterChainTextColor = (): string => {
-  return 'text-white';
+  return 'bg-slate-600';
 };
 
 export const getTheaterChainBorderColor = (chain: string): string => {
-  const chainLower = chain.toLowerCase();
+  const normalized = chain.toLowerCase();
 
-  if (chainLower.includes('toho') || chainLower.includes('tohoシネマズ')) {
+  if (normalized.includes('toho')) {
     return 'border-red-600';
   }
 
-  if (chainLower.includes('ユナイテッド') || chainLower.includes('united')) {
+  if (normalized.includes('united')) {
     return 'border-orange-500';
   }
 
-  if (chainLower.includes('109') || chainLower.includes('シネマズ109')) {
-    return 'border-yellow-400';
+  if (normalized.includes('109')) {
+    return 'border-amber-500';
   }
 
-  if (chainLower.includes('イオン') || chainLower.includes('aeon')) {
-    return 'border-pink-700';
+  if (normalized.includes('aeon')) {
+    return 'border-pink-600';
   }
 
-  if (chainLower.includes('movix') || chainLower.includes('ピカデリー') || chainLower.includes('picadilly')) {
-    return 'border-blue-500';
+  if (normalized.includes('movix') || normalized.includes('piccadilly')) {
+    return 'border-blue-600';
   }
 
-  if (chainLower.includes('humax') || chainLower.includes('ヒューマックス')) {
-    return 'border-green-600';
+  if (normalized.includes('humax')) {
+    return 'border-emerald-600';
   }
 
-  return 'border-gray-500';
+  return 'border-slate-600';
 };

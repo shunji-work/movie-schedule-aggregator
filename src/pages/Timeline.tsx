@@ -1,184 +1,124 @@
 import { useEffect, useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Clock3, Heart, MapPin, Navigation } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Clock, MapPin, Star } from 'lucide-react';
-import { supabase, type Showtime, type Theater, type Movie } from '@/lib/supabase';
-import { getTheaterChainColor, getTheaterChainBorderColor } from '@/lib/theater-colors';
-import { calculateDistance, formatDistance, getMockLocation } from '@/lib/geolocation';
+import { Card, CardContent } from '@/components/ui/card';
+import { listTimelineShowtimes, type ShowtimeWithDetails } from '@/lib/app-data';
+import { formatDistance } from '@/lib/geolocation';
+import { getTheaterChainBorderColor, getTheaterChainColor } from '@/lib/theater-colors';
+import { useUserLocation } from '@/hooks/useUserLocation';
 
-type ShowtimeWithDetails = Showtime & {
-  theater: Theater;
-  movie: Movie;
-  distance?: number;
-};
+function formatShowtime(showtime: string) {
+  return new Date(showtime).toLocaleTimeString('ja-JP', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
 export function Timeline() {
+  const { location } = useUserLocation();
   const [showtimes, setShowtimes] = useState<ShowtimeWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadShowtimes();
-  }, []);
+    let cancelled = false;
 
-  const loadShowtimes = async () => {
-    try {
-      const userLocation = getMockLocation();
+    setLoading(true);
+    listTimelineShowtimes(location)
+      .then((items) => {
+        if (!cancelled) {
+          setShowtimes(items);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
 
-      const { data: favoriteTheaters } = await supabase
-        .from('user_favorite_theaters')
-        .select('theater_id');
-
-      const theaterIds = favoriteTheaters?.map((ft) => ft.theater_id) || [];
-
-      if (theaterIds.length === 0) {
-        setLoading(false);
-        return;
-      }
-
-      const now = new Date();
-      const in10Minutes = new Date(now.getTime() + 10 * 60 * 1000);
-      const endOfDay = new Date(now);
-      endOfDay.setHours(23, 59, 59, 999);
-
-      const { data, error } = await supabase
-        .from('showtimes')
-        .select(`
-          *,
-          theater:theaters(*),
-          movie:movies(*)
-        `)
-        .in('theater_id', theaterIds)
-        .gte('showtime', in10Minutes.toISOString())
-        .lte('showtime', endOfDay.toISOString())
-        .order('showtime', { ascending: true });
-
-      if (error) throw error;
-
-      const showtimesWithDistance = data?.map((showtime: any) => ({
-        ...showtime,
-        distance: calculateDistance(userLocation, {
-          latitude: showtime.theater.latitude,
-          longitude: showtime.theater.longitude,
-        }),
-      })) || [];
-
-      setShowtimes(showtimesWithDistance);
-    } catch (error) {
-      console.error('Error loading showtimes:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="text-slate-600">読み込み中...</div>
-      </div>
-    );
-  }
-
-  if (showtimes.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 text-center px-4">
-        <MapPin className="w-16 h-16 text-slate-300 mb-4" />
-        <h2 className="text-xl font-semibold text-slate-700 mb-2">
-          マイシアターが未登録です
-        </h2>
-        <p className="text-slate-500">
-          劇場マップから劇場を登録すると、上映スケジュールが表示されます
-        </p>
-      </div>
-    );
-  }
+    return () => {
+      cancelled = true;
+    };
+  }, [location]);
 
   return (
-    <div className="space-y-4">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">今日の上映スケジュール</h2>
-        <p className="text-slate-600">マイシアターの上映予定を時系列で表示</p>
-      </div>
+    <div className="space-y-6">
+      <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+        <div className="flex items-center gap-3">
+          <Heart className="h-6 w-6 text-rose-500" />
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">お気に入り映画館のタイムライン</h2>
+            <p className="text-sm text-slate-600">
+              登録した映画館だけに絞って、今日これから観られる上映を並べています。
+            </p>
+          </div>
+        </div>
+      </section>
 
-      {showtimes.map((showtime) => {
-        const showtimeDate = new Date(showtime.showtime);
-        const colorClass = getTheaterChainColor(showtime.theater.chain);
-        const borderClass = getTheaterChainBorderColor(showtime.theater.chain);
-
-        return (
-          <Card
-            key={showtime.id}
-            className={`border-l-4 ${borderClass} hover:shadow-lg transition-shadow`}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0">
-                  <div className="w-20 h-28 bg-slate-200 rounded overflow-hidden">
-                    {showtime.movie.poster_url ? (
-                      <img
-                        src={showtime.movie.poster_url}
-                        alt={showtime.movie.title}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-400">
-                        No Image
+      {loading ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-500">
+          タイムラインを読み込み中です。
+        </div>
+      ) : showtimes.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-slate-500">
+          お気に入り映画館がまだありません。映画館ページで登録すると、この画面に上映が並びます。
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {showtimes.map((showtime) => (
+            <Card
+              key={showtime.id}
+              className={`overflow-hidden border-l-4 ${getTheaterChainBorderColor(
+                showtime.theater.chain
+              )}`}
+            >
+              <CardContent className="p-4">
+                <div className="flex flex-col gap-4 md:flex-row">
+                  <div className="h-28 w-20 overflow-hidden rounded-xl bg-slate-200">
+                    <img
+                      src={showtime.movie.poster_url}
+                      alt={showtime.movie.title}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                  <div className="flex-1 space-y-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-xl font-bold text-slate-900">
+                          {showtime.movie.title}
+                        </h3>
+                        <p className="text-sm text-slate-500">
+                          {showtime.movie.genre} ・ {showtime.movie.duration}分
+                        </p>
                       </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex-1">
-                      <h3 className="font-bold text-lg text-slate-900 leading-tight">
-                        {showtime.movie.title}
-                      </h3>
-                      {showtime.movie.rating && (
-                        <div className="flex items-center gap-1 text-amber-600 mt-1">
-                          <Star className="w-3 h-3 fill-amber-600" />
-                          <span className="text-xs font-semibold">{showtime.movie.rating}</span>
-                        </div>
-                      )}
+                      <Badge className={`${getTheaterChainColor(showtime.theater.chain)} text-white`}>
+                        {showtime.theater.chain}
+                      </Badge>
                     </div>
-                    <Badge className={`${colorClass} text-white flex-shrink-0`}>
-                      {showtime.theater.chain}
-                    </Badge>
-                  </div>
 
-                  <div className="space-y-1 text-sm text-slate-600">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4 flex-shrink-0" />
-                      <span className="truncate">{showtime.theater.name}</span>
-                      {showtime.distance !== undefined && (
-                        <span className="text-slate-500">
-                          ({formatDistance(showtime.distance)})
+                    <div className="grid gap-2 text-sm text-slate-600 md:grid-cols-3">
+                      <div className="flex items-center gap-2">
+                        <Clock3 className="h-4 w-4 text-slate-400" />
+                        <span className="font-semibold text-slate-900">
+                          {formatShowtime(showtime.showtime)}
                         </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 flex-shrink-0" />
-                      <span className="font-semibold text-slate-900">
-                        {showtimeDate.toLocaleTimeString('ja-JP', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                      <span className="text-slate-500">
-                        開始 / {showtime.movie.duration}分
-                      </span>
-                    </div>
-
-                    <div className="text-slate-500">
-                      スクリーン{showtime.screen}
+                        <span>スクリーン {showtime.screen}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-slate-400" />
+                        <span className="truncate">{showtime.theater.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Navigation className="h-4 w-4 text-slate-400" />
+                        <span>{formatDistance(showtime.distance ?? 0)}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
