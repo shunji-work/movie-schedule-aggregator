@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {
   buildTohoScheduleApiUrl,
+  buildTohoPosterUrl,
   collectTohoSchedules,
   parseTohoScheduleResponse,
   parseTohoTheaterList,
@@ -39,6 +40,13 @@ await run('buildTohoScheduleApiUrl embeds date and theater code', async () => {
   assert.match(url, /TNPI3050J02/);
 });
 
+await run('buildTohoPosterUrl builds official TOHO image URL', async () => {
+  assert.equal(
+    buildTohoPosterUrl('027888'),
+    'https://hlo.tohotheater.jp/images_net/movie/027888/SAKUHIN027888_1.jpg'
+  );
+});
+
 await run('parseTohoScheduleResponse normalizes movie and showtime data', async () => {
   const payload = JSON.parse(await fs.readFile('test/fixtures/toho-schedule.json', 'utf8'));
   const parsed = parseTohoScheduleResponse(payload, '2026-03-19');
@@ -46,6 +54,10 @@ await run('parseTohoScheduleResponse normalizes movie and showtime data', async 
   assert.equal(parsed.theater?.code, '009');
   assert.equal(parsed.movies.length, 1);
   assert.equal(parsed.showtimes.length, 1);
+  assert.equal(
+    parsed.movies[0].posterUrl,
+    'https://hlo.tohotheater.jp/images_net/movie/027888/SAKUHIN027888_1.jpg'
+  );
   assert.deepEqual(parsed.showtimes[0], {
     provider: 'toho',
     theaterCode: '009',

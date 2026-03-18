@@ -1,5 +1,6 @@
 const TOHO_THEATER_LIST_URL = 'https://www.tohotheater.jp/theater/find.html';
 const TOHO_SCHEDULE_API = 'https://api2.tohotheater.jp/api/schedule/v1/schedule';
+const TOHO_MOVIE_IMAGE_BASE = 'https://hlo.tohotheater.jp/images_net/movie';
 
 function toYmd(date) {
   return date.replaceAll('-', '');
@@ -99,6 +100,10 @@ export function buildTohoScheduleApiUrl(theaterCode, date) {
   return url.toString();
 }
 
+export function buildTohoPosterUrl(movieCode) {
+  return `${TOHO_MOVIE_IMAGE_BASE}/${movieCode}/SAKUHIN${movieCode}_1.jpg`;
+}
+
 export function parseTohoScheduleResponse(payload, requestedDate) {
   if (payload.status !== '0') {
     throw new Error(`Unexpected TOHO payload status: ${payload.status}`);
@@ -129,6 +134,7 @@ export function parseTohoScheduleResponse(payload, requestedDate) {
         durationMinutes: movie.hours,
         ratingCode: movie.ratingCd || null,
         isNew: movie.newShow === '1' || movie.newShow === '2',
+        posterUrl: buildTohoPosterUrl(movie.code),
       });
       seenMovies.add(movie.code);
     }
