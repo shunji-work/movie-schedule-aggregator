@@ -30,6 +30,181 @@ const WATCHED_KEY = 'movie-schedule.watched-movies';
 
 export const isDemoMode = !supabase;
 
+type LiveCollectorMovie = {
+  providerMovieCode: string;
+  title: string;
+  englishTitle: string | null;
+  durationMinutes: number;
+  ratingCode: string | null;
+  isNew: boolean;
+  posterUrl: string;
+  theaterCode: string;
+};
+
+type LiveCollectorTheater = {
+  code: string;
+  name: string;
+  englishName: string;
+  provider: string;
+  scheduleUrl: string;
+  latitude: number | null;
+  longitude: number | null;
+  address: string;
+};
+
+type LiveCollectorShowtime = {
+  provider: string;
+  theaterCode: string;
+  theaterName: string;
+  movieCode: string;
+  movieTitle: string;
+  screenCode: string;
+  screenName: string;
+  startsAt: string;
+  endsAt: string;
+  seatStatus: string | null;
+  isLateShow: boolean;
+  bookingCode: number;
+};
+
+type LiveCollectorSnapshot = {
+  theaters: LiveCollectorTheater[];
+  movies: LiveCollectorMovie[];
+  showtimes: LiveCollectorShowtime[];
+};
+
+let liveSnapshotPromise:
+  | Promise<{
+      movies: Movie[];
+      theaters: Theater[];
+      showtimes: ShowtimeWithDetails[];
+    } | null>
+  | null = null;
+
+function getTokyoDateString() {
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
+function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
+  const theaterMap = new Map<string, Theater>();
+  const movieMap = new Map<string, Movie>();
+
+  for (const theater of snapshot.theaters) {
+    theaterMap.set(theater.code, {
+      id: `toho-theater-${theater.code}`,
+      name: theater.name,
+      chain: 'TOHO Cinemas',
+      latitude: theater.latitude ?? 35.681236,
+      longitude: theater.longitude ?? 139.767125,
+      address: theater.address || theater.name,
+      created_at: new Date().toISOString(),
+    });
+  }
+
+  const movieShowtimeCounts = new Map<string, number>();
+  for (const showtime of snapshot.showtimes) {
+    movieShowtimeCounts.set(
+      showtime.movieCode,
+      (movieShowtimeCounts.get(showtime.movieCode) ?? 0) + 1
+    );
+  }
+
+  for (const movie of snapshot.movies) {
+    if (movieMap.has(movie.providerMovieCode)) {
+      continue;
+    }
+
+    movieMap.set(movie.providerMovieCode, {
+      id: `toho-movie-${movie.providerMovieCode}`,
+      title: movie.title,
+      poster_url: movie.posterUrl,
+      duration: movie.durationMinutes,
+      genre: movie.englishTitle || 'Movie',
+      ranking: undefined,
+      rating: undefined,
+      created_at: new Date().toISOString(),
+    });
+  }
+
+  const movies = [...movieMap.values()].sort((a, b) => {
+    const codeA = a.id.replace('toho-movie-', '');
+    const codeB = b.id.replace('toho-movie-', '');
+    return (movieShowtimeCounts.get(codeB) ?? 0) - (movieShowtimeCounts.get(codeA) ?? 0);
+  });
+
+  const movieByCode = new Map(movies.map((movie) => [movie.id.replace('toho-movie-', ''), movie]));
+
+  const showtimes = snapshot.showtimes
+    .map((showtime) => {
+      const movie = movieByCode.get(showtime.movieCode);
+      const theater = theaterMap.get(showtime.theaterCode);
+
+      if (!movie || !theater) {
+        return null;
+      }
+
+      return {
+        id: `toho-showtime-${showtime.theaterCode}-${showtime.movieCode}-${showtime.screenCode}-${showtime.bookingCode}-${showtime.startsAt}`,
+        theater_id: theater.id,
+        movie_id: movie.id,
+        showtime: showtime.startsAt,
+        screen: showtime.screenName || showtime.screenCode,
+        created_at: new Date().toISOString(),
+        movie,
+        theater,
+      } satisfies ShowtimeWithDetails;
+    })
+    .filter((item): item is ShowtimeWithDetails => Boolean(item));
+
+  return {
+    movies,
+    theaters: [...theaterMap.values()],
+    showtimes,
+  };
+}
+
+async function fetchLiveSnapshot() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const response = await fetch(`/api/toho?date=${getTokyoDateString()}`, {
+      headers: {
+        accept: 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const snapshot = (await response.json()) as LiveCollectorSnapshot;
+    return normalizeLiveSnapshot(snapshot);
+  } catch {
+    return null;
+  }
+}
+
+async function getLiveSnapshot() {
+  if (!liveSnapshotPromise) {
+    liveSnapshotPromise = fetchLiveSnapshot().then((snapshot) => {
+      if (!snapshot) {
+        liveSnapshotPromise = null;
+      }
+
+      return snapshot;
+    });
+  }
+
+  return liveSnapshotPromise;
+}
+
 const DEMO_MOVIES: Movie[] = [
   {
     id: 'movie-1',
@@ -372,11 +547,21 @@ function getDemoShowtimesWithDetails(): ShowtimeWithDetails[] {
 }
 
 export async function listShowtimesWithDetails(): Promise<ShowtimeWithDetails[]> {
+  const live = await getLiveSnapshot();
+  if (live?.showtimes.length) {
+    return live.showtimes;
+  }
+
   const remote = await fetchRemoteShowtimes();
   return remote ?? getDemoShowtimesWithDetails();
 }
 
 export async function listMovies(): Promise<Movie[]> {
+  const live = await getLiveSnapshot();
+  if (live?.movies.length) {
+    return live.movies;
+  }
+
   const remote = await fetchRemoteMovies();
 
   if (remote) {
@@ -387,6 +572,11 @@ export async function listMovies(): Promise<Movie[]> {
 }
 
 export async function listTheaters(): Promise<Theater[]> {
+  const live = await getLiveSnapshot();
+  if (live?.theaters.length) {
+    return live.theaters;
+  }
+
   const remote = await fetchRemoteTheaters();
   return remote ?? DEMO_THEATERS;
 }

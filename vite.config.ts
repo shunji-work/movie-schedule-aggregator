@@ -9,6 +9,14 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'https://movie-schedule-aggregator.vercel.app',
+        changeOrigin: true,
+      },
+    },
+  },
   optimizeDeps: {
     exclude: ['lucide-react'],
   },

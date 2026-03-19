@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {
+  buildTohoAccessUrl,
   buildTohoScheduleApiUrl,
   buildTohoPosterUrl,
   collectTohoSchedules,
+  parseTohoAccessPage,
   parseTohoScheduleResponse,
   parseTohoTheaterList,
 } from '../scripts/collectors/toho.js';
@@ -47,6 +49,25 @@ await run('buildTohoPosterUrl builds official TOHO image URL', async () => {
   );
 });
 
+await run('buildTohoAccessUrl builds official TOHO access page URL', async () => {
+  assert.equal(
+    buildTohoAccessUrl('009'),
+    'https://www.tohotheater.jp/theater/009/access.html'
+  );
+});
+
+await run('parseTohoAccessPage extracts latitude and longitude', async () => {
+  const html = `
+    <iframe src="https://www.google.com/maps/embed?pb=!1m18!2d139.7271376152281!3d35.659657638762255!4m"></iframe>
+  `;
+
+  assert.deepEqual(parseTohoAccessPage(html), {
+    latitude: 35.659657638762255,
+    longitude: 139.7271376152281,
+    address: '',
+  });
+});
+
 await run('parseTohoScheduleResponse normalizes movie and showtime data', async () => {
   const payload = JSON.parse(await fs.readFile('test/fixtures/toho-schedule.json', 'utf8'));
   const parsed = parseTohoScheduleResponse(payload, '2026-03-19');
@@ -86,6 +107,16 @@ await run('collectTohoSchedules aggregates theater, movie, and showtime records'
       };
     }
 
+    if (String(url).includes('/theater/081/access.html')) {
+      return {
+        ok: true,
+        arrayBuffer: async () =>
+          new TextEncoder().encode(
+            '<iframe src="https://www.google.com/maps/embed?pb=!1m18!2d139.7596!3d35.6745!4m"></iframe>'
+          ),
+      };
+    }
+
     return {
       ok: true,
       json: async () => payload,
@@ -102,6 +133,8 @@ await run('collectTohoSchedules aggregates theater, movie, and showtime records'
   assert.equal(result.theaters.length, 1);
   assert.equal(result.movies.length, 1);
   assert.equal(result.showtimes.length, 1);
+  assert.equal(result.theaters[0].latitude, 35.6745);
+  assert.equal(result.theaters[0].longitude, 139.7596);
 });
 
 if (process.exitCode) {

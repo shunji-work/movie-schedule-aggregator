@@ -1,7 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Clock3, Film, MapPin, User, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { isDemoMode } from '@/lib/app-data';
 
 const navItems = [
   { path: '/timeline', label: 'タイムライン', icon: Clock3 },
@@ -31,7 +30,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             variant="outline"
             className="border-slate-300 bg-slate-50 text-slate-700"
           >
-            {isDemoMode ? 'デモデータ表示中' : 'Supabase接続中'}
+            ライブデータ優先
           </Badge>
         </div>
       </header>

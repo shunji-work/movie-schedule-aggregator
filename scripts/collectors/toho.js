@@ -104,6 +104,30 @@ export function buildTohoPosterUrl(movieCode) {
   return `${TOHO_MOVIE_IMAGE_BASE}/${movieCode}/SAKUHIN${movieCode}_1.jpg`;
 }
 
+export function buildTohoAccessUrl(theaterCode) {
+  return `https://www.tohotheater.jp/theater/${theaterCode}/access.html`;
+}
+
+export function parseTohoAccessPage(html) {
+  const iframeMatch = html.match(/!2d(?<lng>-?\d+\.\d+)!3d(?<lat>-?\d+\.\d+)/);
+  const mapMatch = html.match(/@(?<lat>-?\d+\.\d+),(?<lng>-?\d+\.\d+),/);
+  const match = iframeMatch ?? mapMatch;
+
+  if (!match?.groups) {
+    return {
+      latitude: null,
+      longitude: null,
+      address: '',
+    };
+  }
+
+  return {
+    latitude: Number(match.groups.lat),
+    longitude: Number(match.groups.lng),
+    address: '',
+  };
+}
+
 export function parseTohoScheduleResponse(payload, requestedDate) {
   if (payload.status !== '0') {
     throw new Error(`Unexpected TOHO payload status: ${payload.status}`);
@@ -184,6 +208,11 @@ export async function fetchTohoSchedule(theaterCode, date, fetchImpl = fetch) {
   return parseTohoScheduleResponse(payload, date);
 }
 
+export async function fetchTohoTheaterMetadata(theaterCode, fetchImpl = fetch) {
+  const html = await fetchShiftJisText(buildTohoAccessUrl(theaterCode), fetchImpl);
+  return parseTohoAccessPage(html);
+}
+
 export async function collectTohoSchedules(
   { date, theaterCodes } = {},
   fetchImpl = fetch
@@ -196,9 +225,17 @@ export async function collectTohoSchedules(
 
   const collected = await Promise.all(
     selectedTheaters.map(async (theater) => {
-      const schedule = await fetchTohoSchedule(theater.code, targetDate, fetchImpl);
+      const [schedule, metadata] = await Promise.all([
+        fetchTohoSchedule(theater.code, targetDate, fetchImpl),
+        fetchTohoTheaterMetadata(theater.code, fetchImpl).catch(() => ({
+          latitude: null,
+          longitude: null,
+          address: '',
+        })),
+      ]);
       return {
         ...theater,
+        ...metadata,
         movies: schedule.movies,
         showtimes: schedule.showtimes,
       };
