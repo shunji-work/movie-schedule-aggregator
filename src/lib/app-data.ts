@@ -93,6 +93,9 @@ function getTokyoDateString() {
 function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
   const theaterMap = new Map<string, Theater>();
   const movieMap = new Map<string, Movie>();
+  const sourceMovieMap = new Map(
+    snapshot.movies.map((movie) => [movie.providerMovieCode, movie])
+  );
 
   for (const theater of snapshot.theaters) {
     theaterMap.set(theater.code, {
@@ -125,6 +128,24 @@ function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
       poster_url: movie.posterUrl,
       duration: movie.durationMinutes,
       genre: movie.englishTitle || 'Movie',
+      ranking: undefined,
+      rating: undefined,
+      created_at: new Date().toISOString(),
+    });
+  }
+
+  for (const showtime of snapshot.showtimes) {
+    if (movieMap.has(showtime.movieCode)) {
+      continue;
+    }
+
+    const sourceMovie = sourceMovieMap.get(showtime.movieCode);
+    movieMap.set(showtime.movieCode, {
+      id: `toho-movie-${showtime.movieCode}`,
+      title: sourceMovie?.title || showtime.movieTitle,
+      poster_url: sourceMovie?.posterUrl || '',
+      duration: sourceMovie?.durationMinutes || 0,
+      genre: sourceMovie?.englishTitle || 'Movie',
       ranking: undefined,
       rating: undefined,
       created_at: new Date().toISOString(),

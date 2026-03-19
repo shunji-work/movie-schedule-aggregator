@@ -3,6 +3,7 @@ import { CalendarDays, Clapperboard, PencilLine } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PosterImage } from '@/components/PosterImage';
 import { Textarea } from '@/components/ui/textarea';
 import {
   listWatchedMovies,
@@ -78,10 +79,10 @@ export function Profile() {
                 >
                   <div className="flex flex-col gap-4 md:flex-row">
                     <div className="h-28 w-20 overflow-hidden rounded-xl bg-slate-200">
-                      <img
+                      <PosterImage
                         src={item.movie.poster_url}
                         alt={item.movie.title}
-                        className="h-full w-full object-cover"
+                        className="h-full w-full bg-slate-100 object-contain p-1.5"
                       />
                     </div>
 

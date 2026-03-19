@@ -3,6 +3,7 @@ import { ArrowLeft, Clock3, MapPin, Plus, Star } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { PosterImage } from '@/components/PosterImage';
 import {
   addWatchedMovie,
   listMovieShowtimes,
@@ -93,10 +94,10 @@ export function Movies() {
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <div className="flex flex-col gap-6 md:flex-row">
             <div className="h-64 w-44 overflow-hidden rounded-2xl bg-slate-200">
-              <img
+              <PosterImage
                 src={selectedMovie.poster_url}
                 alt={selectedMovie.title}
-                className="h-full w-full object-cover"
+                className="h-full w-full bg-slate-100 object-contain p-2"
               />
             </div>
             <div className="space-y-4">
@@ -216,10 +217,10 @@ export function Movies() {
           >
             <CardContent className="p-0">
               <div className="aspect-[2/3] overflow-hidden bg-slate-200">
-                <img
+                <PosterImage
                   src={movie.poster_url}
                   alt={movie.title}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full bg-slate-100 object-contain p-2"
                 />
               </div>
               <div className="space-y-2 p-4">

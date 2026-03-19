@@ -11,6 +11,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { PosterImage } from '@/components/PosterImage';
 import { listQuickWatchShowtimes, type ShowtimeWithDetails } from '@/lib/app-data';
 import { formatDistance } from '@/lib/geolocation';
 import { getTheaterChainBorderColor, getTheaterChainColor } from '@/lib/theater-colors';
@@ -227,10 +228,10 @@ export function QuickWatch() {
                 <CardContent className="p-4">
                   <div className="flex flex-col gap-4 md:flex-row">
                     <div className="h-32 w-24 overflow-hidden rounded-xl bg-slate-200">
-                      <img
+                      <PosterImage
                         src={showtime.movie.poster_url}
                         alt={showtime.movie.title}
-                        className="h-full w-full object-cover"
+                        className="h-full w-full bg-slate-100 object-contain p-1.5"
                       />
                     </div>
 
