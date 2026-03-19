@@ -137,6 +137,61 @@ await run('collectTohoSchedules aggregates theater, movie, and showtime records'
   assert.equal(result.theaters[0].longitude, 139.7596);
 });
 
+await run('collectTohoSchedules skips theaters with unavailable schedules', async () => {
+  const theaterHtml = `
+    <a href="/net/schedule/081/TNPI2000J01.do"><span>TOHOシネマズ日比谷<span class="nav-local-en">HIBIYA</span></span></a>
+    <a href="/net/schedule/009/TNPI2000J01.do"><span>TOHOシネマズ六本木ヒルズ<span class="nav-local-en">ROPPONGI HILLS</span></span></a>
+  `;
+
+  const payload = JSON.parse(await fs.readFile('test/fixtures/toho-schedule.json', 'utf8'));
+
+  const result = await collectTohoSchedules({ date: '2026-03-19' }, async (url) => {
+    if (String(url).includes('find.html')) {
+      return {
+        ok: true,
+        arrayBuffer: async () => new TextEncoder().encode(theaterHtml),
+      };
+    }
+
+    if (String(url).includes('/theater/081/access.html')) {
+      return {
+        ok: true,
+        arrayBuffer: async () =>
+          new TextEncoder().encode(
+            '<iframe src="https://www.google.com/maps/embed?pb=!1m18!2d139.7596!3d35.6745!4m"></iframe>'
+          ),
+      };
+    }
+
+    if (String(url).includes('/theater/009/access.html')) {
+      return {
+        ok: true,
+        arrayBuffer: async () =>
+          new TextEncoder().encode(
+            '<iframe src="https://www.google.com/maps/embed?pb=!1m18!2d139.7271!3d35.6596!4m"></iframe>'
+          ),
+      };
+    }
+
+    if (String(url).includes('/schedule/009/')) {
+      return {
+        ok: true,
+        json: async () => ({ status: '1', data: [] }),
+      };
+    }
+
+    return {
+      ok: true,
+      json: async () => payload,
+    };
+  });
+
+  assert.equal(result.theaters.length, 2);
+  assert.equal(result.movies.length, 1);
+  assert.equal(result.showtimes.length, 1);
+  assert.equal(result.theaters[1].code, '009');
+});
+
 if (process.exitCode) {
   process.exit(process.exitCode);
 }

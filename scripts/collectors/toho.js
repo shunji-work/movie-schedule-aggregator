@@ -225,8 +225,28 @@ export async function collectTohoSchedules(
 
   const collected = await Promise.all(
     selectedTheaters.map(async (theater) => {
+      const schedulePromise = fetchTohoSchedule(theater.code, targetDate, fetchImpl).catch(
+        (error) => {
+          if (
+            error instanceof Error &&
+            error.message === 'Unexpected TOHO payload status: 1'
+          ) {
+            return {
+              theater: {
+                code: theater.code,
+                name: theater.name,
+                provider: 'toho',
+              },
+              movies: [],
+              showtimes: [],
+            };
+          }
+
+          throw error;
+        }
+      );
       const [schedule, metadata] = await Promise.all([
-        fetchTohoSchedule(theater.code, targetDate, fetchImpl),
+        schedulePromise,
         fetchTohoTheaterMetadata(theater.code, fetchImpl).catch(() => ({
           latitude: null,
           longitude: null,
