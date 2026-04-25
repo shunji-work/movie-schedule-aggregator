@@ -55,6 +55,8 @@ export function Movies() {
       return;
     }
 
+    if (!location) return;
+
     let cancelled = false;
     setDetailLoading(true);
 

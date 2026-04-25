@@ -34,12 +34,14 @@ function formatShowtime(showtime: string) {
 }
 
 export function QuickWatch() {
-  const { location, isFallback, status } = useUserLocation();
+  const { location, status } = useUserLocation();
   const [showtimes, setShowtimes] = useState<ShowtimeWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortMode, setSortMode] = useState<SortMode>('recommended');
 
   useEffect(() => {
+    if (!location) return;
+
     let cancelled = false;
 
     setLoading(true);
@@ -151,11 +153,13 @@ export function QuickWatch() {
           </div>
           <div className="rounded-2xl bg-white/10 px-4 py-3 text-sm text-slate-100">
             <div className="font-semibold">
-              {status === 'detecting' ? '位置情報を確認中' : isFallback ? '東京駅周辺で表示中' : '現在地で表示中'}
+              {status === 'detecting' ? '位置情報を取得中...' : status === 'fallback' ? '位置情報を取得できませんでした' : '現在地で表示中'}
             </div>
-            <div className="text-slate-300">
-              {location.latitude.toFixed(3)}, {location.longitude.toFixed(3)}
-            </div>
+            {location && (
+              <div className="text-slate-300">
+                {location.latitude.toFixed(3)}, {location.longitude.toFixed(3)}
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -191,9 +195,13 @@ export function QuickWatch() {
         </Button>
       </div>
 
-      {loading ? (
+      {status === 'fallback' ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-500">
-          上映情報を読み込み中です。
+          位置情報へのアクセスが許可されていません。ブラウザの設定から位置情報の使用を許可してください。
+        </div>
+      ) : loading ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-500">
+          {status === 'detecting' ? '位置情報を取得中です。' : '上映情報を読み込み中です。'}
         </div>
       ) : sortedShowtimes.length === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-500">

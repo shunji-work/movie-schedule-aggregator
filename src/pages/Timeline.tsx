@@ -21,6 +21,8 @@ export function Timeline() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!location) return;
+
     let cancelled = false;
 
     setLoading(true);
