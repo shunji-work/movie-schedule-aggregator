@@ -49,7 +49,8 @@ export const getCurrentLocation = (): Promise<Location> => {
       },
       (error) => {
         reject(error);
-      }
+      },
+      { timeout: 10000, maximumAge: 60000 }
     );
   });
 };
