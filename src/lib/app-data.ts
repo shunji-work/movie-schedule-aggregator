@@ -29,6 +29,7 @@ const FAVORITES_KEY = 'movie-schedule.favorite-theaters';
 const WATCHED_KEY = 'movie-schedule.watched-movies';
 export const LIVE_SCHEDULES_TIMEOUT_MS = 75_000;
 export const LIVE_TOHO_FALLBACK_TIMEOUT_MS = 15_000;
+export const NEARBY_THEATER_RADIUS_KM = 20;
 const FALLBACK_THEATER_LOCATION = {
   latitude: 35.681236,
   longitude: 139.767125,
@@ -207,6 +208,14 @@ function getTheaterDistance(location: Location, theater: Theater) {
 
 function compareDistance(a: number | null | undefined, b: number | null | undefined) {
   return (a ?? Number.POSITIVE_INFINITY) - (b ?? Number.POSITIVE_INFINITY);
+}
+
+export function isWithinNearbyRadius(distance: number | null | undefined) {
+  return (
+    typeof distance === 'number' &&
+    Number.isFinite(distance) &&
+    distance <= NEARBY_THEATER_RADIUS_KM
+  );
 }
 
 export function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
@@ -837,7 +846,8 @@ export async function listQuickWatchShowtimes(
     .map((item) => ({
       ...item,
       distance: getTheaterDistance(location, item.theater) ?? undefined,
-    }));
+    }))
+    .filter((item) => isWithinNearbyRadius(item.distance));
 }
 
 export async function listTimelineShowtimes(
@@ -866,6 +876,7 @@ export async function listTimelineShowtimes(
       ...item,
       distance: getTheaterDistance(location, item.theater) ?? undefined,
     }))
+    .filter((item) => isWithinNearbyRadius(item.distance))
     .sort((a, b) => new Date(a.showtime).getTime() - new Date(b.showtime).getTime());
 }
 
@@ -885,6 +896,7 @@ export async function listMovieShowtimes(
       ...item,
       distance: getTheaterDistance(location, item.theater) ?? undefined,
     }))
+    .filter((item) => isWithinNearbyRadius(item.distance))
     .sort((a, b) => compareDistance(a.distance, b.distance));
 }
 
@@ -912,6 +924,7 @@ export async function listTheatersWithMeta(
         movieCount: new Set(theaterShowtimes.map((item) => item.movie_id)).size,
       };
     })
+    .filter((theater) => isWithinNearbyRadius(theater.distance))
     .sort((a, b) => compareDistance(a.distance, b.distance));
 }
 

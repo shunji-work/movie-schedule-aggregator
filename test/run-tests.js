@@ -421,12 +421,19 @@ await run('normalizeLiveSnapshot dedupes same-title movies across providers', as
     const {
       LIVE_SCHEDULES_TIMEOUT_MS,
       LIVE_TOHO_FALLBACK_TIMEOUT_MS,
+      NEARBY_THEATER_RADIUS_KM,
       hasKnownTheaterLocation,
+      isWithinNearbyRadius,
       normalizeLiveSnapshot,
     } = await vite.ssrLoadModule('/src/lib/app-data.ts');
 
     assert.ok(LIVE_SCHEDULES_TIMEOUT_MS >= 60_000);
     assert.equal(LIVE_TOHO_FALLBACK_TIMEOUT_MS, 15_000);
+    assert.equal(NEARBY_THEATER_RADIUS_KM, 20);
+    assert.equal(isWithinNearbyRadius(19.99), true);
+    assert.equal(isWithinNearbyRadius(20), true);
+    assert.equal(isWithinNearbyRadius(20.01), false);
+    assert.equal(isWithinNearbyRadius(null), false);
 
     const normalized = normalizeLiveSnapshot({
       provider: 'all',
