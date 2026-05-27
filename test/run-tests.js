@@ -451,6 +451,8 @@ await run('normalizeLiveSnapshot dedupes same-title movies across providers', as
       LIVE_SCHEDULES_TIMEOUT_MS,
       LIVE_TOHO_FALLBACK_TIMEOUT_MS,
       NEARBY_THEATER_RADIUS_KM,
+      QUICKWATCH_DISTANCE_TIE_KM,
+      compareQuickWatchShowtimes,
       hasKnownTheaterLocation,
       isWithinNearbyRadius,
       normalizeLiveSnapshot,
@@ -459,6 +461,7 @@ await run('normalizeLiveSnapshot dedupes same-title movies across providers', as
     assert.ok(LIVE_SCHEDULES_TIMEOUT_MS >= 60_000);
     assert.equal(LIVE_TOHO_FALLBACK_TIMEOUT_MS, 15_000);
     assert.equal(NEARBY_THEATER_RADIUS_KM, 20);
+    assert.equal(QUICKWATCH_DISTANCE_TIE_KM, 1);
     assert.equal(isWithinNearbyRadius(19.99), true);
     assert.equal(isWithinNearbyRadius(20), true);
     assert.equal(isWithinNearbyRadius(20.01), false);
@@ -570,6 +573,25 @@ await run('normalizeLiveSnapshot dedupes same-title movies across providers', as
       'https://example.test/toho.jpg',
       'https://example.test/aeon.jpg',
     ]);
+
+    const closeLater = {
+      distance: 3,
+      showtime: '2026-05-27T11:00:00+09:00',
+      movie: { ranking: 999 },
+    };
+    const farSooner = {
+      distance: 12,
+      showtime: '2026-05-27T10:10:00+09:00',
+      movie: { ranking: 1 },
+    };
+    const almostSameDistanceSooner = {
+      distance: 3.5,
+      showtime: '2026-05-27T10:00:00+09:00',
+      movie: { ranking: 999 },
+    };
+
+    assert.equal(compareQuickWatchShowtimes(closeLater, farSooner) < 0, true);
+    assert.equal(compareQuickWatchShowtimes(closeLater, almostSameDistanceSooner) > 0, true);
   } finally {
     await vite.close();
   }

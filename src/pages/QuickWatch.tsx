@@ -12,7 +12,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { PosterImage } from '@/components/PosterImage';
-import { listQuickWatchShowtimes, type ShowtimeWithDetails } from '@/lib/app-data';
+import {
+  compareQuickWatchShowtimes,
+  listQuickWatchShowtimes,
+  type ShowtimeWithDetails,
+} from '@/lib/app-data';
 import { formatDistance } from '@/lib/geolocation';
 import { getTheaterChainBorderColor, getTheaterChainColor } from '@/lib/theater-colors';
 import { useUserLocation } from '@/hooks/useUserLocation';
@@ -87,38 +91,7 @@ export function QuickWatch() {
       );
     }
 
-    const knownDistances = items
-      .map((item) => item.distance)
-      .filter((distance): distance is number => typeof distance === 'number' && Number.isFinite(distance));
-    const maxDistance = Math.max(...knownDistances, 1);
-    const minTime = Math.min(
-      ...items.map((item) => new Date(item.showtime).getTime()),
-      Date.now()
-    );
-    const maxTime = Math.max(...items.map((item) => new Date(item.showtime).getTime()));
-
-    return items
-      .map((item) => {
-        const distanceScore =
-          typeof item.distance === 'number' && Number.isFinite(item.distance)
-            ? 1 - item.distance / maxDistance
-            : 0;
-        const rankingScore = 1 - Math.min((item.movie.ranking ?? 100) / 100, 1);
-        const ratingScore = (item.movie.rating ?? 0) / 5;
-        const timeRange = Math.max(maxTime - minTime, 1);
-        const timeScore = 1 - (new Date(item.showtime).getTime() - minTime) / timeRange;
-
-        return {
-          item,
-          score:
-            distanceScore * 0.55 +
-            timeScore * 0.25 +
-            rankingScore * 0.15 +
-            ratingScore * 0.05,
-        };
-      })
-      .sort((a, b) => b.score - a.score)
-      .map(({ item }) => item);
+    return items.sort(compareQuickWatchShowtimes);
   }, [showtimes, sortMode]);
 
   const nearestId = useMemo(() => {

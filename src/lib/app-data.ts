@@ -30,6 +30,7 @@ const WATCHED_KEY = 'movie-schedule.watched-movies';
 export const LIVE_SCHEDULES_TIMEOUT_MS = 75_000;
 export const LIVE_TOHO_FALLBACK_TIMEOUT_MS = 15_000;
 export const NEARBY_THEATER_RADIUS_KM = 20;
+export const QUICKWATCH_DISTANCE_TIE_KM = 1;
 const FALLBACK_THEATER_LOCATION = {
   latitude: 35.681236,
   longitude: 139.767125,
@@ -207,7 +208,14 @@ function getTheaterDistance(location: Location, theater: Theater) {
 }
 
 function compareDistance(a: number | null | undefined, b: number | null | undefined) {
-  return (a ?? Number.POSITIVE_INFINITY) - (b ?? Number.POSITIVE_INFINITY);
+  const left = a ?? Number.POSITIVE_INFINITY;
+  const right = b ?? Number.POSITIVE_INFINITY;
+
+  if (left === right) {
+    return 0;
+  }
+
+  return left - right;
 }
 
 export function isWithinNearbyRadius(distance: number | null | undefined) {
@@ -216,6 +224,24 @@ export function isWithinNearbyRadius(distance: number | null | undefined) {
     Number.isFinite(distance) &&
     distance <= NEARBY_THEATER_RADIUS_KM
   );
+}
+
+export function compareQuickWatchShowtimes(
+  a: ShowtimeWithDetails,
+  b: ShowtimeWithDetails
+) {
+  const distanceDelta = compareDistance(a.distance, b.distance);
+
+  if (Math.abs(distanceDelta) > QUICKWATCH_DISTANCE_TIE_KM) {
+    return distanceDelta;
+  }
+
+  const startDelta = new Date(a.showtime).getTime() - new Date(b.showtime).getTime();
+  if (startDelta !== 0) {
+    return startDelta;
+  }
+
+  return (a.movie.ranking ?? 999) - (b.movie.ranking ?? 999);
 }
 
 export function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
