@@ -1,4 +1,5 @@
 import {
+  buildJstDateTime,
   decodeEntities,
   fetchJson,
   fetchText,
@@ -135,8 +136,8 @@ export function parseTohoScheduleResponse(payload, requestedDate) {
           movieTitle: movie.name,
           screenCode: screen.code,
           screenName: screen.name,
-          startsAt: `${normalizedDate}T${item.showingStart}:00+09:00`,
-          endsAt: `${normalizedDate}T${item.showingEnd}:00+09:00`,
+          startsAt: buildJstDateTime(normalizedDate, item.showingStart),
+          endsAt: buildJstDateTime(normalizedDate, item.showingEnd),
           seatStatus: item.unsoldSeatInfo?.unsoldSeatStatus ?? null,
           isLateShow: item.bgColor === '#E4E3DF',
           bookingCode: item.code,

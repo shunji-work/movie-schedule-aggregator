@@ -113,6 +113,20 @@ await run('parseTohoScheduleResponse normalizes movie and showtime data', async 
   });
 });
 
+await run('parseTohoScheduleResponse pads single-digit showtime hours', async () => {
+  const payload = JSON.parse(await fs.readFile('test/fixtures/toho-schedule.json', 'utf8'));
+  const showtime = payload.data[0].list[0].list[0].list[0].list[0];
+
+  showtime.showingStart = '9:15';
+  showtime.showingEnd = '11:35';
+
+  const parsed = parseTohoScheduleResponse(payload, '2026-05-28');
+
+  assert.equal(parsed.showtimes[0].startsAt, '2026-05-28T09:15:00+09:00');
+  assert.equal(parsed.showtimes[0].endsAt, '2026-05-28T11:35:00+09:00');
+  assert.equal(Number.isNaN(new Date(parsed.showtimes[0].startsAt).getTime()), false);
+});
+
 await run('parseTohoScheduleResponse uses master movie code for poster URL', async () => {
   const payload = JSON.parse(await fs.readFile('test/fixtures/toho-schedule.json', 'utf8'));
   const movie = payload.data[0].list[0].list[0];
