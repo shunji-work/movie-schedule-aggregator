@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Clock3, Film, MapPin, User, Zap } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { LocationModeControl } from '@/components/LocationModeControl';
 
 const navItems = [
   { path: '/timeline', label: 'タイムライン', icon: Clock3 },
@@ -16,7 +16,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-4">
+        <div className="mx-auto flex w-full max-w-6xl flex-col items-start justify-between gap-4 px-4 py-4 md:flex-row md:items-center">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-red-500">
               Movie Schedule Aggregator
@@ -26,12 +26,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               現在地から近い映画館の上映時間をまとめて比較できます。
             </p>
           </div>
-          <Badge
-            variant="outline"
-            className="border-slate-300 bg-slate-50 text-slate-700"
-          >
-            ライブデータ優先
-          </Badge>
+          <LocationModeControl />
         </div>
       </header>
 

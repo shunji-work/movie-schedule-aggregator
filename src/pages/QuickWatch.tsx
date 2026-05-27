@@ -34,7 +34,7 @@ function formatShowtime(showtime: string) {
 }
 
 export function QuickWatch() {
-  const { location, status } = useUserLocation();
+  const { location, status, sourceLabel } = useUserLocation();
   const [showtimes, setShowtimes] = useState<ShowtimeWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortMode, setSortMode] = useState<SortMode>('recommended');
@@ -153,7 +153,9 @@ export function QuickWatch() {
           </div>
           <div className="rounded-2xl bg-white/10 px-4 py-3 text-sm text-slate-100">
             <div className="font-semibold">
-              {status === 'detecting' ? '位置情報を取得中...' : status === 'fallback' ? '位置情報を取得できませんでした' : '現在地で表示中'}
+              {status === 'detecting'
+                ? '位置情報を取得中...'
+                : `${sourceLabel}で表示中`}
             </div>
             {location && (
               <div className="text-slate-300">
@@ -197,7 +199,7 @@ export function QuickWatch() {
 
       {status === 'fallback' ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          位置情報を取得できなかったため、東京駅周辺を基準に表示しています。正確な距離順で見るにはブラウザの位置情報を許可してください。
+          位置情報を取得できなかったため、{sourceLabel}周辺を基準に表示しています。
         </div>
       ) : null}
 
