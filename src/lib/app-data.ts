@@ -27,6 +27,8 @@ export type WatchedMovieWithDetails = UserWatchedMovie & {
 
 const FAVORITES_KEY = 'movie-schedule.favorite-theaters';
 const WATCHED_KEY = 'movie-schedule.watched-movies';
+export const LIVE_SCHEDULES_TIMEOUT_MS = 75_000;
+export const LIVE_TOHO_FALLBACK_TIMEOUT_MS = 15_000;
 
 export const isDemoMode = !supabase;
 
@@ -351,8 +353,8 @@ async function fetchLiveSnapshot() {
 
   const date = getTokyoDateString();
   const endpoints = [
-    { path: '/api/schedules', timeoutMs: 12_000 },
-    { path: '/api/toho', timeoutMs: 15_000 },
+    { path: '/api/schedules', timeoutMs: LIVE_SCHEDULES_TIMEOUT_MS },
+    { path: '/api/toho', timeoutMs: LIVE_TOHO_FALLBACK_TIMEOUT_MS },
   ];
 
   for (const endpoint of endpoints) {

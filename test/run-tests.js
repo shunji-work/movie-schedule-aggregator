@@ -418,7 +418,15 @@ await run('normalizeLiveSnapshot dedupes same-title movies across providers', as
   });
 
   try {
-    const { normalizeLiveSnapshot } = await vite.ssrLoadModule('/src/lib/app-data.ts');
+    const {
+      LIVE_SCHEDULES_TIMEOUT_MS,
+      LIVE_TOHO_FALLBACK_TIMEOUT_MS,
+      normalizeLiveSnapshot,
+    } = await vite.ssrLoadModule('/src/lib/app-data.ts');
+
+    assert.ok(LIVE_SCHEDULES_TIMEOUT_MS >= 60_000);
+    assert.equal(LIVE_TOHO_FALLBACK_TIMEOUT_MS, 15_000);
+
     const normalized = normalizeLiveSnapshot({
       provider: 'all',
       chain: 'Multiple',
