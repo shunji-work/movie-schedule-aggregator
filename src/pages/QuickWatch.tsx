@@ -33,6 +33,12 @@ function formatShowtime(showtime: string) {
   });
 }
 
+function getSortableDistance(distance?: number) {
+  return typeof distance === 'number' && Number.isFinite(distance)
+    ? distance
+    : Number.POSITIVE_INFINITY;
+}
+
 export function QuickWatch() {
   const { location, status, sourceLabel } = useUserLocation();
   const [showtimes, setShowtimes] = useState<ShowtimeWithDetails[]>([]);
@@ -66,7 +72,7 @@ export function QuickWatch() {
     const items = [...showtimes];
 
     if (sortMode === 'distance') {
-      return items.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
+      return items.sort((a, b) => getSortableDistance(a.distance) - getSortableDistance(b.distance));
     }
 
     if (sortMode === 'time') {
@@ -81,7 +87,10 @@ export function QuickWatch() {
       );
     }
 
-    const maxDistance = Math.max(...items.map((item) => item.distance ?? 0), 1);
+    const knownDistances = items
+      .map((item) => item.distance)
+      .filter((distance): distance is number => typeof distance === 'number' && Number.isFinite(distance));
+    const maxDistance = Math.max(...knownDistances, 1);
     const minTime = Math.min(
       ...items.map((item) => new Date(item.showtime).getTime()),
       Date.now()
@@ -90,7 +99,10 @@ export function QuickWatch() {
 
     return items
       .map((item) => {
-        const distanceScore = 1 - (item.distance ?? 0) / maxDistance;
+        const distanceScore =
+          typeof item.distance === 'number' && Number.isFinite(item.distance)
+            ? 1 - item.distance / maxDistance
+            : 0;
         const rankingScore = 1 - Math.min((item.movie.ranking ?? 100) / 100, 1);
         const ratingScore = (item.movie.rating ?? 0) / 5;
         const timeRange = Math.max(maxTime - minTime, 1);
@@ -295,7 +307,7 @@ export function QuickWatch() {
                         </div>
                         <div className="flex items-center gap-2">
                           <Navigation className="h-4 w-4 text-slate-400" />
-                          <span>{formatDistance(showtime.distance ?? 0)}</span>
+                          <span>{formatDistance(showtime.distance)}</span>
                           <span>スクリーン {showtime.screen}</span>
                         </div>
                       </div>

@@ -180,7 +180,7 @@ export function Movies() {
                           <span className="truncate">{showtime.theater.address}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span>{formatDistance(showtime.distance ?? 0)}</span>
+                          <span>{formatDistance(showtime.distance)}</span>
                         </div>
                       </div>
                     </div>

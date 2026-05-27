@@ -175,7 +175,11 @@ const toRad = (value: number): number => {
   return (value * Math.PI) / 180;
 };
 
-export const formatDistance = (km: number): string => {
+export const formatDistance = (km?: number | null): string => {
+  if (typeof km !== 'number' || !Number.isFinite(km)) {
+    return '距離不明';
+  }
+
   if (km < 1) {
     return `${Math.round(km * 1000)}m`;
   }

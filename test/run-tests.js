@@ -421,6 +421,7 @@ await run('normalizeLiveSnapshot dedupes same-title movies across providers', as
     const {
       LIVE_SCHEDULES_TIMEOUT_MS,
       LIVE_TOHO_FALLBACK_TIMEOUT_MS,
+      hasKnownTheaterLocation,
       normalizeLiveSnapshot,
     } = await vite.ssrLoadModule('/src/lib/app-data.ts');
 
@@ -438,8 +439,8 @@ await run('normalizeLiveSnapshot dedupes same-title movies across providers', as
           provider: 'toho',
           chain: 'TOHO Cinemas',
           scheduleUrl: '',
-          latitude: null,
-          longitude: null,
+          latitude: 35.6745,
+          longitude: 139.7596,
           address: '',
         },
         {
@@ -513,6 +514,14 @@ await run('normalizeLiveSnapshot dedupes same-title movies across providers', as
     assert.equal(normalized.movies.length, 1);
     assert.equal(normalized.theaters.length, 2);
     assert.equal(normalized.showtimes.length, 2);
+    assert.equal(
+      hasKnownTheaterLocation(normalized.theaters.find((theater) => theater.id === 'toho-theater-001')),
+      true
+    );
+    assert.equal(
+      hasKnownTheaterLocation(normalized.theaters.find((theater) => theater.id === 'aeon-theater-001')),
+      false
+    );
     assert.deepEqual(
       new Set(normalized.theaters.map((theater) => theater.id)),
       new Set(['toho-theater-001', 'aeon-theater-001'])

@@ -14,7 +14,7 @@ export type ShowtimeWithDetails = Showtime & {
 };
 
 export type TheaterWithMeta = Theater & {
-  distance: number;
+  distance: number | null;
   isFavorite: boolean;
   nextShowtime: string | null;
   movieCount: number;
@@ -29,6 +29,10 @@ const FAVORITES_KEY = 'movie-schedule.favorite-theaters';
 const WATCHED_KEY = 'movie-schedule.watched-movies';
 export const LIVE_SCHEDULES_TIMEOUT_MS = 75_000;
 export const LIVE_TOHO_FALLBACK_TIMEOUT_MS = 15_000;
+const FALLBACK_THEATER_LOCATION = {
+  latitude: 35.681236,
+  longitude: 139.767125,
+};
 
 export const isDemoMode = !supabase;
 
@@ -180,6 +184,31 @@ function buildLiveId(value: string) {
     .slice(0, 80);
 }
 
+export function hasKnownTheaterLocation(
+  theater: Pick<Theater, 'latitude' | 'longitude' | 'has_location'>
+) {
+  if (theater.has_location === false) {
+    return false;
+  }
+
+  return Number.isFinite(theater.latitude) && Number.isFinite(theater.longitude);
+}
+
+function getTheaterDistance(location: Location, theater: Theater) {
+  if (!hasKnownTheaterLocation(theater)) {
+    return null;
+  }
+
+  return calculateDistance(location, {
+    latitude: theater.latitude,
+    longitude: theater.longitude,
+  });
+}
+
+function compareDistance(a: number | null | undefined, b: number | null | undefined) {
+  return (a ?? Number.POSITIVE_INFINITY) - (b ?? Number.POSITIVE_INFINITY);
+}
+
 export function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
   const theaterMap = new Map<string, Theater>();
   const movieMap = new Map<string, Movie>();
@@ -199,12 +228,19 @@ export function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
 
   for (const theater of snapshot.theaters) {
     const provider = theater.provider || snapshot.provider || 'toho';
+    const hasLocation =
+      typeof theater.latitude === 'number' &&
+      Number.isFinite(theater.latitude) &&
+      typeof theater.longitude === 'number' &&
+      Number.isFinite(theater.longitude);
+
     theaterMap.set(buildSourceKey(provider, theater.code), {
       id: `${provider}-theater-${theater.code}`,
       name: theater.name,
       chain: getProviderChain(provider, theater.chain ?? snapshot.chain),
-      latitude: theater.latitude ?? 35.681236,
-      longitude: theater.longitude ?? 139.767125,
+      latitude: hasLocation ? theater.latitude! : FALLBACK_THEATER_LOCATION.latitude,
+      longitude: hasLocation ? theater.longitude! : FALLBACK_THEATER_LOCATION.longitude,
+      has_location: hasLocation,
       address: theater.address || theater.name,
       created_at: new Date().toISOString(),
     });
@@ -800,10 +836,7 @@ export async function listQuickWatchShowtimes(
     })
     .map((item) => ({
       ...item,
-      distance: calculateDistance(location, {
-        latitude: item.theater.latitude,
-        longitude: item.theater.longitude,
-      }),
+      distance: getTheaterDistance(location, item.theater) ?? undefined,
     }));
 }
 
@@ -831,10 +864,7 @@ export async function listTimelineShowtimes(
     })
     .map((item) => ({
       ...item,
-      distance: calculateDistance(location, {
-        latitude: item.theater.latitude,
-        longitude: item.theater.longitude,
-      }),
+      distance: getTheaterDistance(location, item.theater) ?? undefined,
     }))
     .sort((a, b) => new Date(a.showtime).getTime() - new Date(b.showtime).getTime());
 }
@@ -853,12 +883,9 @@ export async function listMovieShowtimes(
     })
     .map((item) => ({
       ...item,
-      distance: calculateDistance(location, {
-        latitude: item.theater.latitude,
-        longitude: item.theater.longitude,
-      }),
+      distance: getTheaterDistance(location, item.theater) ?? undefined,
     }))
-    .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
+    .sort((a, b) => compareDistance(a.distance, b.distance));
 }
 
 export async function listTheatersWithMeta(
@@ -879,16 +906,13 @@ export async function listTheatersWithMeta(
 
       return {
         ...theater,
-        distance: calculateDistance(location, {
-          latitude: theater.latitude,
-          longitude: theater.longitude,
-        }),
+        distance: getTheaterDistance(location, theater),
         isFavorite: favoriteIds.has(theater.id),
         nextShowtime: theaterShowtimes[0]?.showtime ?? null,
         movieCount: new Set(theaterShowtimes.map((item) => item.movie_id)).size,
       };
     })
-    .sort((a, b) => a.distance - b.distance);
+    .sort((a, b) => compareDistance(a.distance, b.distance));
 }
 
 export function addWatchedMovie(movieId: string, theaterId: string | null) {

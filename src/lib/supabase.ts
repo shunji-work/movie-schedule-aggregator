@@ -15,6 +15,7 @@ export type Theater = {
   chain: string;
   latitude: number;
   longitude: number;
+  has_location?: boolean;
   address: string;
   created_at: string;
 };

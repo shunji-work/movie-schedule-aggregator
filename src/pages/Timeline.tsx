@@ -112,7 +112,7 @@ export function Timeline() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Navigation className="h-4 w-4 text-slate-400" />
-                        <span>{formatDistance(showtime.distance ?? 0)}</span>
+                        <span>{formatDistance(showtime.distance)}</span>
                       </div>
                     </div>
                   </div>

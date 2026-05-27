@@ -73,7 +73,11 @@ export function Theaters() {
       ) : (
         <div className="space-y-4">
           {theaters.map((theater) => {
-            const mapUrl = `https://www.google.com/maps/search/?api=1&query=${theater.latitude},${theater.longitude}`;
+            const mapQuery =
+              theater.has_location === false
+                ? `${theater.name} ${theater.address}`
+                : `${theater.latitude},${theater.longitude}`;
+            const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`;
 
             return (
               <Card
