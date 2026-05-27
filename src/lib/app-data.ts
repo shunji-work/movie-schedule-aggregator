@@ -104,18 +104,44 @@ function getTokyoDateString() {
   }).format(new Date());
 }
 
-function normalizeMovieTitleForPoster(title: string) {
+const MOVIE_FORMAT_TOKEN_PATTERN =
+  /(?:dolby\s*cinema|dolby\s*atmos|screenx|imax|mx4d|4dx|atmos|uhd|4k|3d|2d)/gi;
+const MOVIE_VERSION_TOKEN_PATTERN = /(?:字幕版?|吹替版?|日本語版|英語版)/g;
+
+function stripMovieTitleQualifiers(title: string) {
   return title
     .normalize('NFKC')
-    .replace(/\([^)]*\)/g, '')
-    .replace(/\([^)]*$/g, '')
-    .replace(/（[^）]*）/g, '')
-    .replace(/（[^）]*$/g, '')
-    .replace(/【[^】]*】/g, '')
-    .replace(/\[[^\]]*\]/g, '')
-    .replace(/【[^】]*】/g, '')
-    .replace(/\s+/g, '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\([^)]*$/g, ' ')
+    .replace(/[\uFF08][^\uFF09]*[\uFF09]/g, ' ')
+    .replace(/[\uFF08][^\uFF09]*$/g, ' ')
+    .replace(/[\u3010][^\u3011]*[\u3011]/g, ' ')
+    .replace(/[\u3010][^\u3011]*$/g, ' ')
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/^\s*映画(?=\s|[\u300E\u300F\u300C\u300D])/g, ' ')
+    .replace(/[\u300E\u300F\u300C\u300D]/g, ' ')
+    .replace(/([\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}])\s+[A-Za-z][A-Za-z0-9: '&./-]+$/gu, '$1')
+    .replace(MOVIE_FORMAT_TOKEN_PATTERN, ' ')
+    .replace(MOVIE_VERSION_TOKEN_PATTERN, ' ')
+    .replace(/^(?:(?:字幕|吹替|日本語|英語)\s*)+/g, ' ')
+    .replace(/(?:(?:字幕|吹替|日本語|英語)\s*)+$/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeMovieTitleForPoster(title: string) {
+  return stripMovieTitleQualifiers(title)
+    .replace(/^\s*\u5287\u5834\u7248\s*/g, '')
+    .replace(/[.…]+/g, '')
+    .replace(/[\s\u3000・･／/:：,，、。"'“”‘’『』「」&＆\-‐‑‒–—―_+＋=＝~〜～]+/g, '')
     .toLowerCase();
+}
+
+function normalizeMovieTitleForDisplay(title: string) {
+  return stripMovieTitleQualifiers(title)
+    .replace(/^[\s\u3000・･／/:：,，、。"'“”‘’『』「」&＆\-‐‑‒–—―_+＋=＝~〜～]+/g, '')
+    .replace(/[\s\u3000・･／/:：,，、。"'“”‘’『』「」&＆\-‐‑‒–—―_+＋=＝~〜～]+$/g, '')
+    .trim();
 }
 
 function pushUnique(target: string[], value: string) {
@@ -218,6 +244,24 @@ function compareDistance(a: number | null | undefined, b: number | null | undefi
   return left - right;
 }
 
+function findCompatibleMovieTitleKey(titleKey: string, existingKeys: Iterable<string>) {
+  if (titleKey.length < 8) {
+    return titleKey;
+  }
+
+  for (const existingKey of existingKeys) {
+    const shorterLength = Math.min(titleKey.length, existingKey.length);
+    if (
+      shorterLength >= 8 &&
+      (existingKey.startsWith(titleKey) || titleKey.startsWith(existingKey))
+    ) {
+      return existingKey;
+    }
+  }
+
+  return titleKey;
+}
+
 export function isWithinNearbyRadius(distance: number | null | undefined) {
   return (
     typeof distance === 'number' &&
@@ -281,17 +325,6 @@ export function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
     });
   }
 
-  const movieShowtimeCounts = new Map<string, number>();
-  for (const showtime of snapshot.showtimes) {
-    const titleKey =
-      normalizeMovieTitleForPoster(showtime.movieTitle) ||
-      buildSourceKey(showtime.provider, showtime.movieCode);
-    movieShowtimeCounts.set(
-      titleKey,
-      (movieShowtimeCounts.get(titleKey) ?? 0) + 1
-    );
-  }
-
   for (const movie of snapshot.movies) {
     const provider =
       movie.provider ??
@@ -299,7 +332,10 @@ export function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
       snapshot.provider ??
       'toho';
     const sourceKey = buildSourceKey(provider, movie.providerMovieCode);
-    const titleKey = normalizeMovieTitleForPoster(movie.title) || sourceKey;
+    const normalizedTitleKey = normalizeMovieTitleForPoster(movie.title);
+    const titleKey = normalizedTitleKey
+      ? findCompatibleMovieTitleKey(normalizedTitleKey, movieMap.keys())
+      : sourceKey;
     sourceMovieMap.set(sourceKey, movie);
     movieTitleKeyBySource.set(sourceKey, titleKey);
 
@@ -307,9 +343,11 @@ export function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
       continue;
     }
 
+    const displayTitle = normalizeMovieTitleForDisplay(movie.title) || movie.title;
+
     movieMap.set(titleKey, {
       id: `live-movie-${buildLiveId(titleKey) || movie.providerMovieCode}`,
-      title: movie.title,
+      title: displayTitle,
       poster_url: movie.posterUrl,
       poster_urls: posterCandidatesByCode.get(sourceKey),
       duration: movie.durationMinutes,
@@ -322,9 +360,12 @@ export function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
 
   for (const showtime of snapshot.showtimes) {
     const sourceKey = buildSourceKey(showtime.provider, showtime.movieCode);
+    const normalizedTitleKey = normalizeMovieTitleForPoster(showtime.movieTitle);
     const titleKey =
       (movieTitleKeyBySource.get(sourceKey) ??
-        normalizeMovieTitleForPoster(showtime.movieTitle)) ||
+        (normalizedTitleKey
+          ? findCompatibleMovieTitleKey(normalizedTitleKey, movieMap.keys())
+          : '')) ||
       sourceKey;
 
     if (movieMap.has(titleKey)) {
@@ -332,9 +373,11 @@ export function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
     }
 
     const sourceMovie = sourceMovieMap.get(sourceKey);
+    const sourceTitle = sourceMovie?.title || showtime.movieTitle;
+    const displayTitle = normalizeMovieTitleForDisplay(sourceTitle) || sourceTitle;
     movieMap.set(titleKey, {
       id: `live-movie-${buildLiveId(titleKey) || showtime.movieCode}`,
-      title: sourceMovie?.title || showtime.movieTitle,
+      title: displayTitle,
       poster_url: sourceMovie?.posterUrl || '',
       poster_urls: sourceMovie
         ? posterCandidatesByCode.get(sourceKey)
@@ -345,6 +388,22 @@ export function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
       rating: undefined,
       created_at: new Date().toISOString(),
     });
+  }
+
+  const movieShowtimeCounts = new Map<string, number>();
+  for (const showtime of snapshot.showtimes) {
+    const sourceKey = buildSourceKey(showtime.provider, showtime.movieCode);
+    const normalizedTitleKey = normalizeMovieTitleForPoster(showtime.movieTitle);
+    const titleKey =
+      (movieTitleKeyBySource.get(sourceKey) ??
+        (normalizedTitleKey
+          ? findCompatibleMovieTitleKey(normalizedTitleKey, movieMap.keys())
+          : '')) ||
+      sourceKey;
+    movieShowtimeCounts.set(
+      titleKey,
+      (movieShowtimeCounts.get(titleKey) ?? 0) + 1
+    );
   }
 
   const movieShowtimeCountById = new Map(
@@ -364,9 +423,12 @@ export function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
   const showtimes = snapshot.showtimes
     .map((showtime) => {
       const sourceKey = buildSourceKey(showtime.provider, showtime.movieCode);
+      const normalizedTitleKey = normalizeMovieTitleForPoster(showtime.movieTitle);
       const titleKey =
         (movieTitleKeyBySource.get(sourceKey) ??
-          normalizeMovieTitleForPoster(showtime.movieTitle)) ||
+          (normalizedTitleKey
+            ? findCompatibleMovieTitleKey(normalizedTitleKey, movieByTitleKey.keys())
+            : '')) ||
         sourceKey;
       const movie = movieByTitleKey.get(titleKey);
       const theater = theaterMap.get(buildSourceKey(showtime.provider, showtime.theaterCode));

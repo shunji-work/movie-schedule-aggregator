@@ -611,6 +611,288 @@ await run('normalizeLiveSnapshot dedupes same-title movies across providers', as
   }
 });
 
+await run('normalizeLiveSnapshot dedupes movie format variants', async () => {
+  const vite = await createServer({
+    appType: 'custom',
+    logLevel: 'silent',
+    server: { middlewareMode: true },
+  });
+
+  try {
+    const { normalizeLiveSnapshot } = await vite.ssrLoadModule('/src/lib/app-data.ts');
+    const normalized = normalizeLiveSnapshot({
+      provider: 'all',
+      chain: 'Multiple',
+      theaters: [
+        {
+          code: '043',
+          name: 'TOHO Shibuya',
+          englishName: '',
+          provider: 'toho',
+          chain: 'TOHO Cinemas',
+          scheduleUrl: '',
+          latitude: 35.659,
+          longitude: 139.697,
+          address: '',
+        },
+        {
+          code: 'futakotamagawa',
+          name: '109 Futako',
+          englishName: '',
+          provider: '109',
+          chain: '109 Cinemas',
+          scheduleUrl: '',
+          latitude: 35.6115,
+          longitude: 139.6264,
+          address: '',
+        },
+      ],
+      movies: [
+        {
+          provider: 'toho',
+          providerMovieCode: 'sw-dolby',
+          title: 'スター・ウォーズ／マンダロリアン・アンド・グローグー（ＤｏｌｂｙＣＩＮＥＭＡ・字幕版）',
+          englishTitle: null,
+          durationMinutes: 120,
+          ratingCode: null,
+          isNew: false,
+          posterUrl: 'https://example.test/sw-toho.jpg',
+          theaterCode: '043',
+        },
+        {
+          provider: '109',
+          providerMovieCode: 'sw-4dx',
+          title: '3D吹替4DX ｽﾀｰ･ｳｫｰｽﾞ ﾏﾝﾀﾞﾛﾘｱﾝ･ｱﾝﾄﾞ･ｸﾞﾛｰｸﾞｰ',
+          englishTitle: null,
+          durationMinutes: 120,
+          ratingCode: null,
+          isNew: false,
+          posterUrl: 'https://example.test/sw-109.jpg',
+          theaterCode: 'futakotamagawa',
+        },
+        {
+          provider: 'toho',
+          providerMovieCode: 'sw-truncated',
+          title: 'スター・ウォーズ／マンダロリアン...',
+          englishTitle: null,
+          durationMinutes: 120,
+          ratingCode: null,
+          isNew: false,
+          posterUrl: 'https://example.test/sw-truncated.jpg',
+          theaterCode: '043',
+        },
+      ],
+      showtimes: [
+        {
+          provider: 'toho',
+          theaterCode: '043',
+          theaterName: 'TOHO Shibuya',
+          movieCode: 'sw-dolby',
+          movieTitle: 'スター・ウォーズ／マンダロリアン・アンド・グローグー（ＤｏｌｂｙＣＩＮＥＭＡ・字幕版）',
+          screenCode: '1',
+          screenName: 'Screen 1',
+          startsAt: '2026-05-28T09:20:00+09:00',
+          endsAt: '2026-05-28T11:20:00+09:00',
+          seatStatus: null,
+          isLateShow: false,
+          bookingCode: 'toho-1',
+        },
+        {
+          provider: '109',
+          theaterCode: 'futakotamagawa',
+          theaterName: '109 Futako',
+          movieCode: 'sw-4dx',
+          movieTitle: '3D吹替4DX ｽﾀｰ･ｳｫｰｽﾞ ﾏﾝﾀﾞﾛﾘｱﾝ･ｱﾝﾄﾞ･ｸﾞﾛｰｸﾞｰ',
+          screenCode: '2',
+          screenName: 'Screen 2',
+          startsAt: '2026-05-28T10:20:00+09:00',
+          endsAt: '2026-05-28T12:20:00+09:00',
+          seatStatus: null,
+          isLateShow: false,
+          bookingCode: '109-1',
+        },
+        {
+          provider: 'toho',
+          theaterCode: '043',
+          theaterName: 'TOHO Shibuya',
+          movieCode: 'sw-truncated',
+          movieTitle: 'スター・ウォーズ／マンダロリアン...',
+          screenCode: '3',
+          screenName: 'Screen 3',
+          startsAt: '2026-05-28T11:20:00+09:00',
+          endsAt: '2026-05-28T13:20:00+09:00',
+          seatStatus: null,
+          isLateShow: false,
+          bookingCode: 'toho-2',
+        },
+      ],
+    });
+
+    assert.equal(normalized.movies.length, 1);
+    assert.equal(normalized.movies[0].title, 'スター・ウォーズ/マンダロリアン・アンド・グローグー');
+    assert.equal(normalized.showtimes.length, 3);
+    assert.deepEqual(
+      new Set(normalized.showtimes.map((showtime) => showtime.movie_id)),
+      new Set([normalized.movies[0].id])
+    );
+  } finally {
+    await vite.close();
+  }
+});
+
+await run('normalizeLiveSnapshot dedupes decorated Japanese movie titles', async () => {
+  const vite = await createServer({
+    appType: 'custom',
+    logLevel: 'silent',
+    server: { middlewareMode: true },
+  });
+
+  try {
+    const { normalizeLiveSnapshot } = await vite.ssrLoadModule('/src/lib/app-data.ts');
+    const normalized = normalizeLiveSnapshot({
+      provider: 'all',
+      chain: 'Multiple',
+      theaters: [
+        {
+          code: '043',
+          name: 'TOHO Shibuya',
+          englishName: '',
+          provider: 'toho',
+          chain: 'TOHO Cinemas',
+          scheduleUrl: '',
+          latitude: 35.659,
+          longitude: 139.697,
+          address: '',
+        },
+        {
+          code: 'toyosu',
+          name: 'United Toyosu',
+          englishName: '',
+          provider: 'united',
+          chain: 'United Cinemas',
+          scheduleUrl: '',
+          latitude: 35.655,
+          longitude: 139.796,
+          address: '',
+        },
+      ],
+      movies: [
+        {
+          provider: 'toho',
+          providerMovieCode: 'quiz-toho',
+          title: '映画『君のクイズ』',
+          englishTitle: null,
+          durationMinutes: 120,
+          ratingCode: null,
+          isNew: false,
+          posterUrl: '',
+          theaterCode: '043',
+        },
+        {
+          provider: 'united',
+          providerMovieCode: 'quiz-united',
+          title: '君のクイズ',
+          englishTitle: null,
+          durationMinutes: 120,
+          ratingCode: null,
+          isNew: false,
+          posterUrl: '',
+          theaterCode: 'toyosu',
+        },
+        {
+          provider: 'toho',
+          providerMovieCode: 'conan-toho',
+          title: '名探偵コナン ハイウェイの堕天使',
+          englishTitle: null,
+          durationMinutes: 120,
+          ratingCode: null,
+          isNew: false,
+          posterUrl: '',
+          theaterCode: '043',
+        },
+        {
+          provider: 'united',
+          providerMovieCode: 'conan-united',
+          title: '劇場版「名探偵コナン ハイウェイの堕天使」',
+          englishTitle: null,
+          durationMinutes: 120,
+          ratingCode: null,
+          isNew: false,
+          posterUrl: '',
+          theaterCode: 'toyosu',
+        },
+      ],
+      showtimes: [
+        {
+          provider: 'toho',
+          theaterCode: '043',
+          theaterName: 'TOHO Shibuya',
+          movieCode: 'quiz-toho',
+          movieTitle: '映画『君のクイズ』',
+          screenCode: '1',
+          screenName: 'Screen 1',
+          startsAt: '2026-05-28T09:20:00+09:00',
+          endsAt: '2026-05-28T11:20:00+09:00',
+          seatStatus: null,
+          isLateShow: false,
+          bookingCode: 'toho-quiz',
+        },
+        {
+          provider: 'united',
+          theaterCode: 'toyosu',
+          theaterName: 'United Toyosu',
+          movieCode: 'quiz-united',
+          movieTitle: '君のクイズ',
+          screenCode: '2',
+          screenName: 'Screen 2',
+          startsAt: '2026-05-28T10:20:00+09:00',
+          endsAt: '2026-05-28T12:20:00+09:00',
+          seatStatus: null,
+          isLateShow: false,
+          bookingCode: 'united-quiz',
+        },
+        {
+          provider: 'toho',
+          theaterCode: '043',
+          theaterName: 'TOHO Shibuya',
+          movieCode: 'conan-toho',
+          movieTitle: '名探偵コナン ハイウェイの堕天使',
+          screenCode: '1',
+          screenName: 'Screen 1',
+          startsAt: '2026-05-28T13:20:00+09:00',
+          endsAt: '2026-05-28T15:20:00+09:00',
+          seatStatus: null,
+          isLateShow: false,
+          bookingCode: 'toho-conan',
+        },
+        {
+          provider: 'united',
+          theaterCode: 'toyosu',
+          theaterName: 'United Toyosu',
+          movieCode: 'conan-united',
+          movieTitle: '劇場版「名探偵コナン ハイウェイの堕天使」',
+          screenCode: '2',
+          screenName: 'Screen 2',
+          startsAt: '2026-05-28T14:20:00+09:00',
+          endsAt: '2026-05-28T16:20:00+09:00',
+          seatStatus: null,
+          isLateShow: false,
+          bookingCode: 'united-conan',
+        },
+      ],
+    });
+
+    assert.equal(normalized.movies.length, 2);
+    assert.deepEqual(
+      new Set(normalized.movies.map((movie) => movie.title)),
+      new Set(['君のクイズ', '名探偵コナン ハイウェイの堕天使'])
+    );
+    assert.equal(normalized.showtimes.length, 4);
+  } finally {
+    await vite.close();
+  }
+});
+
 if (process.exitCode) {
   process.exit(process.exitCode);
 }
