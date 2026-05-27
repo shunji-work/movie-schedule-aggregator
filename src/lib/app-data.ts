@@ -31,6 +31,7 @@ const WATCHED_KEY = 'movie-schedule.watched-movies';
 export const isDemoMode = !supabase;
 
 type LiveCollectorMovie = {
+  provider?: string;
   providerMovieCode: string;
   title: string;
   englishTitle: string | null;
@@ -46,6 +47,7 @@ type LiveCollectorTheater = {
   name: string;
   englishName: string;
   provider: string;
+  chain?: string;
   scheduleUrl: string;
   latitude: number | null;
   longitude: number | null;
@@ -64,13 +66,17 @@ type LiveCollectorShowtime = {
   endsAt: string;
   seatStatus: string | null;
   isLateShow: boolean;
-  bookingCode: number;
+  bookingCode: string | number;
+  bookingUrl?: string;
 };
 
 type LiveCollectorSnapshot = {
+  provider?: string;
+  chain?: string;
   theaters: LiveCollectorTheater[];
   movies: LiveCollectorMovie[];
   showtimes: LiveCollectorShowtime[];
+  errors?: Array<{ provider: string; message: string; theaterCode?: string }>;
 };
 
 let liveSnapshotPromise:
@@ -95,8 +101,11 @@ function normalizeMovieTitleForPoster(title: string) {
     .normalize('NFKC')
     .replace(/\([^)]*\)/g, '')
     .replace(/\([^)]*$/g, '')
+    .replace(/（[^）]*）/g, '')
+    .replace(/（[^）]*$/g, '')
     .replace(/【[^】]*】/g, '')
     .replace(/\[[^\]]*\]/g, '')
+    .replace(/【[^】]*】/g, '')
     .replace(/\s+/g, '')
     .toLowerCase();
 }
@@ -107,7 +116,10 @@ function pushUnique(target: string[], value: string) {
   }
 }
 
-function buildPosterCandidateMap(movies: LiveCollectorMovie[]) {
+function buildPosterCandidateMap(
+  movies: LiveCollectorMovie[],
+  getProviderForMovie: (movie: LiveCollectorMovie) => string
+) {
   const candidatesByTitle = new Map<string, string[]>();
 
   for (const movie of movies) {
@@ -127,25 +139,68 @@ function buildPosterCandidateMap(movies: LiveCollectorMovie[]) {
       pushUnique(ownCandidates, candidate);
     }
 
-    candidatesByCode.set(movie.providerMovieCode, ownCandidates);
+    candidatesByCode.set(
+      `${getProviderForMovie(movie)}:${movie.providerMovieCode}`,
+      ownCandidates
+    );
   }
 
   return candidatesByCode;
 }
 
-function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
+function getProviderChain(provider: string, fallback?: string) {
+  if (fallback) {
+    return fallback;
+  }
+
+  const labels: Record<string, string> = {
+    toho: 'TOHO Cinemas',
+    aeon: 'AEON Cinema',
+    united: 'United Cinemas',
+    '109': '109 Cinemas',
+    smt: 'MOVIX / Piccadilly',
+    tjoy: 'T-Joy',
+  };
+
+  return labels[provider] ?? provider;
+}
+
+function buildSourceKey(provider: string, code: string) {
+  return `${provider}:${code}`;
+}
+
+function buildLiveId(value: string) {
+  return value
+    .normalize('NFKC')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase()
+    .slice(0, 80);
+}
+
+export function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
   const theaterMap = new Map<string, Theater>();
   const movieMap = new Map<string, Movie>();
-  const posterCandidatesByCode = buildPosterCandidateMap(snapshot.movies);
-  const sourceMovieMap = new Map(
-    snapshot.movies.map((movie) => [movie.providerMovieCode, movie])
+  const theaterProviderByCode = new Map(
+    snapshot.theaters.map((theater) => [theater.code, theater.provider])
   );
+  const posterCandidatesByCode = buildPosterCandidateMap(
+    snapshot.movies,
+    (movie) =>
+      movie.provider ??
+      theaterProviderByCode.get(movie.theaterCode) ??
+      snapshot.provider ??
+      'toho'
+  );
+  const movieTitleKeyBySource = new Map<string, string>();
+  const sourceMovieMap = new Map<string, LiveCollectorMovie>();
 
   for (const theater of snapshot.theaters) {
-    theaterMap.set(theater.code, {
-      id: `toho-theater-${theater.code}`,
+    const provider = theater.provider || snapshot.provider || 'toho';
+    theaterMap.set(buildSourceKey(provider, theater.code), {
+      id: `${provider}-theater-${theater.code}`,
       name: theater.name,
-      chain: 'TOHO Cinemas',
+      chain: getProviderChain(provider, theater.chain ?? snapshot.chain),
       latitude: theater.latitude ?? 35.681236,
       longitude: theater.longitude ?? 139.767125,
       address: theater.address || theater.name,
@@ -155,22 +210,35 @@ function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
 
   const movieShowtimeCounts = new Map<string, number>();
   for (const showtime of snapshot.showtimes) {
+    const titleKey =
+      normalizeMovieTitleForPoster(showtime.movieTitle) ||
+      buildSourceKey(showtime.provider, showtime.movieCode);
     movieShowtimeCounts.set(
-      showtime.movieCode,
-      (movieShowtimeCounts.get(showtime.movieCode) ?? 0) + 1
+      titleKey,
+      (movieShowtimeCounts.get(titleKey) ?? 0) + 1
     );
   }
 
   for (const movie of snapshot.movies) {
-    if (movieMap.has(movie.providerMovieCode)) {
+    const provider =
+      movie.provider ??
+      theaterProviderByCode.get(movie.theaterCode) ??
+      snapshot.provider ??
+      'toho';
+    const sourceKey = buildSourceKey(provider, movie.providerMovieCode);
+    const titleKey = normalizeMovieTitleForPoster(movie.title) || sourceKey;
+    sourceMovieMap.set(sourceKey, movie);
+    movieTitleKeyBySource.set(sourceKey, titleKey);
+
+    if (movieMap.has(titleKey)) {
       continue;
     }
 
-    movieMap.set(movie.providerMovieCode, {
-      id: `toho-movie-${movie.providerMovieCode}`,
+    movieMap.set(titleKey, {
+      id: `live-movie-${buildLiveId(titleKey) || movie.providerMovieCode}`,
       title: movie.title,
       poster_url: movie.posterUrl,
-      poster_urls: posterCandidatesByCode.get(movie.providerMovieCode),
+      poster_urls: posterCandidatesByCode.get(sourceKey),
       duration: movie.durationMinutes,
       genre: movie.englishTitle || 'Movie',
       ranking: undefined,
@@ -180,17 +248,23 @@ function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
   }
 
   for (const showtime of snapshot.showtimes) {
-    if (movieMap.has(showtime.movieCode)) {
+    const sourceKey = buildSourceKey(showtime.provider, showtime.movieCode);
+    const titleKey =
+      (movieTitleKeyBySource.get(sourceKey) ??
+        normalizeMovieTitleForPoster(showtime.movieTitle)) ||
+      sourceKey;
+
+    if (movieMap.has(titleKey)) {
       continue;
     }
 
-    const sourceMovie = sourceMovieMap.get(showtime.movieCode);
-    movieMap.set(showtime.movieCode, {
-      id: `toho-movie-${showtime.movieCode}`,
+    const sourceMovie = sourceMovieMap.get(sourceKey);
+    movieMap.set(titleKey, {
+      id: `live-movie-${buildLiveId(titleKey) || showtime.movieCode}`,
       title: sourceMovie?.title || showtime.movieTitle,
       poster_url: sourceMovie?.posterUrl || '',
       poster_urls: sourceMovie
-        ? posterCandidatesByCode.get(sourceMovie.providerMovieCode)
+        ? posterCandidatesByCode.get(sourceKey)
         : undefined,
       duration: sourceMovie?.durationMinutes || 0,
       genre: sourceMovie?.englishTitle || 'Movie',
@@ -200,25 +274,36 @@ function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
     });
   }
 
-  const movies = [...movieMap.values()].sort((a, b) => {
-    const codeA = a.id.replace('toho-movie-', '');
-    const codeB = b.id.replace('toho-movie-', '');
-    return (movieShowtimeCounts.get(codeB) ?? 0) - (movieShowtimeCounts.get(codeA) ?? 0);
-  });
+  const movieShowtimeCountById = new Map(
+    [...movieMap.entries()].map(([titleKey, movie]) => [
+      movie.id,
+      movieShowtimeCounts.get(titleKey) ?? 0,
+    ])
+  );
+  const movies = [...movieMap.values()].sort(
+    (a, b) => (movieShowtimeCountById.get(b.id) ?? 0) - (movieShowtimeCountById.get(a.id) ?? 0)
+  );
 
-  const movieByCode = new Map(movies.map((movie) => [movie.id.replace('toho-movie-', ''), movie]));
+  const movieByTitleKey = new Map(
+    [...movieMap.entries()].map(([titleKey, movie]) => [titleKey, movie])
+  );
 
   const showtimes = snapshot.showtimes
     .map((showtime) => {
-      const movie = movieByCode.get(showtime.movieCode);
-      const theater = theaterMap.get(showtime.theaterCode);
+      const sourceKey = buildSourceKey(showtime.provider, showtime.movieCode);
+      const titleKey =
+        (movieTitleKeyBySource.get(sourceKey) ??
+          normalizeMovieTitleForPoster(showtime.movieTitle)) ||
+        sourceKey;
+      const movie = movieByTitleKey.get(titleKey);
+      const theater = theaterMap.get(buildSourceKey(showtime.provider, showtime.theaterCode));
 
       if (!movie || !theater) {
         return null;
       }
 
       return {
-        id: `toho-showtime-${showtime.theaterCode}-${showtime.movieCode}-${showtime.screenCode}-${showtime.bookingCode}-${showtime.startsAt}`,
+        id: `${showtime.provider}-showtime-${showtime.theaterCode}-${showtime.movieCode}-${showtime.screenCode}-${showtime.bookingCode}-${showtime.startsAt}`,
         theater_id: theater.id,
         movie_id: movie.id,
         showtime: showtime.startsAt,
@@ -237,27 +322,58 @@ function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
   };
 }
 
-async function fetchLiveSnapshot() {
-  if (typeof window === 'undefined') {
-    return null;
-  }
+async function fetchLiveSnapshotEndpoint(endpoint: string, date: string, timeoutMs: number) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(`/api/toho?date=${getTokyoDateString()}`, {
+    const response = await fetch(`${endpoint}?date=${date}`, {
       headers: {
         accept: 'application/json',
       },
+      signal: controller.signal,
     });
 
     if (!response.ok) {
       return null;
     }
 
-    const snapshot = (await response.json()) as LiveCollectorSnapshot;
-    return normalizeLiveSnapshot(snapshot);
-  } catch {
+    return (await response.json()) as LiveCollectorSnapshot;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+async function fetchLiveSnapshot() {
+  if (typeof window === 'undefined') {
     return null;
   }
+
+  const date = getTokyoDateString();
+  const endpoints = [
+    { path: '/api/schedules', timeoutMs: 12_000 },
+    { path: '/api/toho', timeoutMs: 15_000 },
+  ];
+
+  for (const endpoint of endpoints) {
+    try {
+      const snapshot = await fetchLiveSnapshotEndpoint(endpoint.path, date, endpoint.timeoutMs);
+
+      if (!snapshot) {
+        continue;
+      }
+
+      const normalized = normalizeLiveSnapshot(snapshot);
+
+      if (normalized.showtimes.length || normalized.theaters.length) {
+        return normalized;
+      }
+    } catch {
+      // Try the compatibility endpoint before falling back to Supabase/demo data.
+    }
+  }
+
+  return null;
 }
 
 async function getLiveSnapshot() {

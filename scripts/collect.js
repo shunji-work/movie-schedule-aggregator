@@ -2,7 +2,11 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { collectTohoSchedules } from './collectors/toho.js';
+import {
+  collectAllSchedules,
+  collectProviderSchedules,
+  PROVIDER_ORDER,
+} from './collectors/index.js';
 
 function getArg(name, fallback) {
   const index = process.argv.indexOf(name);
@@ -25,24 +29,27 @@ function formatDateInput(value) {
 }
 
 async function main() {
-  const provider = getArg('--provider', 'toho');
+  const provider = getArg('--provider', 'all');
   const date = formatDateInput(getArg('--date'));
   const out = getArg(
     '--out',
     path.join('data', 'collected', `${provider}-${date}.json`)
   );
 
-  if (provider !== 'toho') {
+  if (provider !== 'all' && !PROVIDER_ORDER.includes(provider)) {
     throw new Error(`Unsupported provider: ${provider}`);
   }
 
-  const result = await collectTohoSchedules({ date });
+  const result =
+    provider === 'all'
+      ? await collectAllSchedules({ date })
+      : await collectProviderSchedules(provider, { date });
 
   await fs.mkdir(path.dirname(out), { recursive: true });
   await fs.writeFile(out, JSON.stringify(result, null, 2));
 
   process.stdout.write(
-    `Collected ${result.theaters.length} theaters and ${result.showtimes.length} showtimes into ${out}\n`
+    `Collected ${result.theaters.length} theaters and ${result.showtimes.length} showtimes from ${provider} into ${out}\n`
   );
 }
 

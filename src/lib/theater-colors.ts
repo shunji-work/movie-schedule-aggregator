@@ -25,6 +25,10 @@ export const getTheaterChainColor = (chain: string): string => {
     return 'bg-emerald-600';
   }
 
+  if (normalized.includes('t-joy') || normalized.includes('tjoy')) {
+    return 'bg-violet-600';
+  }
+
   return 'bg-slate-600';
 };
 
@@ -53,6 +57,10 @@ export const getTheaterChainBorderColor = (chain: string): string => {
 
   if (normalized.includes('humax')) {
     return 'border-emerald-600';
+  }
+
+  if (normalized.includes('t-joy') || normalized.includes('tjoy')) {
+    return 'border-violet-600';
   }
 
   return 'border-slate-600';

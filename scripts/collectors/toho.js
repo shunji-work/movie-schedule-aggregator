@@ -1,62 +1,16 @@
+import {
+  decodeEntities,
+  fetchJson,
+  fetchText,
+  normalizeWhitespace,
+  stripTags,
+  toYmd,
+  PROVIDER_CHAINS,
+} from './shared.js';
+
 const TOHO_THEATER_LIST_URL = 'https://www.tohotheater.jp/theater/find.html';
 const TOHO_SCHEDULE_API = 'https://api2.tohotheater.jp/api/schedule/v1/schedule';
 const TOHO_MOVIE_IMAGE_BASE = 'https://hlo.tohotheater.jp/images_net/movie';
-
-function toYmd(date) {
-  return date.replaceAll('-', '');
-}
-
-function decodeShiftJis(buffer) {
-  return new TextDecoder('shift_jis').decode(buffer);
-}
-
-function normalizeWhitespace(value) {
-  return value.replace(/\s+/g, ' ').trim();
-}
-
-function stripTags(value) {
-  return value.replace(/<[^>]+>/g, ' ');
-}
-
-function decodeEntities(value) {
-  return value
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>');
-}
-
-async function fetchShiftJisText(url, fetchImpl = fetch) {
-  const response = await fetchImpl(url, {
-    headers: {
-      'user-agent': 'movie-schedule-aggregator/1.0',
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Request failed: ${response.status} ${response.statusText} for ${url}`);
-  }
-
-  const buffer = await response.arrayBuffer();
-  return decodeShiftJis(buffer);
-}
-
-async function fetchJson(url, fetchImpl = fetch) {
-  const response = await fetchImpl(url, {
-    headers: {
-      'user-agent': 'movie-schedule-aggregator/1.0',
-      accept: 'application/json,text/plain,*/*',
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Request failed: ${response.status} ${response.statusText} for ${url}`);
-  }
-
-  return response.json();
-}
 
 export function parseTohoTheaterList(html) {
   const regex =
@@ -75,6 +29,7 @@ export function parseTohoTheaterList(html) {
       name: normalizeWhitespace(rawName),
       englishName: normalizeWhitespace(match.groups.english),
       provider: 'toho',
+      chain: PROVIDER_CHAINS.toho,
       scheduleUrl: `https://hlo.tohotheater.jp/net/schedule/${code}/TNPI2000J01.do`,
     });
   }
@@ -154,6 +109,7 @@ export function parseTohoScheduleResponse(payload, requestedDate) {
 
     if (!seenMovies.has(movie.code)) {
       movies.push({
+        provider: 'toho',
         providerMovieCode: movie.code,
         title: movie.name,
         englishTitle: movie.ename || null,
@@ -184,6 +140,7 @@ export function parseTohoScheduleResponse(payload, requestedDate) {
           seatStatus: item.unsoldSeatInfo?.unsoldSeatStatus ?? null,
           isLateShow: item.bgColor === '#E4E3DF',
           bookingCode: item.code,
+          bookingUrl: `https://hlo.tohotheater.jp/net/schedule/${site.code}/TNPI2000J01.do`,
         });
       }
     }
@@ -194,6 +151,7 @@ export function parseTohoScheduleResponse(payload, requestedDate) {
       code: site.code,
       name: site.name,
       provider: 'toho',
+      chain: PROVIDER_CHAINS.toho,
     },
     movies,
     showtimes,
@@ -201,7 +159,7 @@ export function parseTohoScheduleResponse(payload, requestedDate) {
 }
 
 export async function fetchTohoTheaters(fetchImpl = fetch) {
-  const html = await fetchShiftJisText(TOHO_THEATER_LIST_URL, fetchImpl);
+  const html = await fetchText(TOHO_THEATER_LIST_URL, fetchImpl, { charset: 'shift_jis' });
   return parseTohoTheaterList(html);
 }
 
@@ -211,7 +169,7 @@ export async function fetchTohoSchedule(theaterCode, date, fetchImpl = fetch) {
 }
 
 export async function fetchTohoTheaterMetadata(theaterCode, fetchImpl = fetch) {
-  const html = await fetchShiftJisText(buildTohoAccessUrl(theaterCode), fetchImpl);
+  const html = await fetchText(buildTohoAccessUrl(theaterCode), fetchImpl, { charset: 'shift_jis' });
   return parseTohoAccessPage(html);
 }
 
@@ -238,6 +196,7 @@ export async function collectTohoSchedules(
                 code: theater.code,
                 name: theater.name,
                 provider: 'toho',
+                chain: PROVIDER_CHAINS.toho,
               },
               movies: [],
               showtimes: [],
@@ -266,6 +225,7 @@ export async function collectTohoSchedules(
 
   return {
     provider: 'toho',
+    chain: PROVIDER_CHAINS.toho,
     date: targetDate,
     collectedAt: new Date().toISOString(),
     theaters: collected.map(({ movies, showtimes, ...theater }) => theater),
