@@ -95,11 +95,11 @@ export function Movies() {
 
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <div className="flex flex-col gap-6 md:flex-row">
-            <div className="h-64 w-44 overflow-hidden rounded-2xl bg-slate-200">
+            <div className="aspect-video w-full max-w-md overflow-hidden rounded-2xl bg-slate-200">
               <PosterImage
-                src={selectedMovie.poster_url}
+                src={selectedMovie.poster_urls ?? selectedMovie.poster_url}
                 alt={selectedMovie.title}
-                className="h-full w-full bg-slate-100 object-contain p-2"
+                className="h-full w-full object-cover"
               />
             </div>
             <div className="space-y-4">
@@ -218,11 +218,11 @@ export function Movies() {
             onClick={() => setSelectedMovie(movie)}
           >
             <CardContent className="p-0">
-              <div className="aspect-[2/3] overflow-hidden bg-slate-200">
+              <div className="aspect-video overflow-hidden bg-slate-200">
                 <PosterImage
-                  src={movie.poster_url}
+                  src={movie.poster_urls ?? movie.poster_url}
                   alt={movie.title}
-                  className="h-full w-full bg-slate-100 object-contain p-2"
+                  className="h-full w-full object-cover"
                 />
               </div>
               <div className="space-y-2 p-4">

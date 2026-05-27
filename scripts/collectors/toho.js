@@ -150,6 +150,8 @@ export function parseTohoScheduleResponse(payload, requestedDate) {
   const seenMovies = new Set();
 
   for (const movie of site.list ?? []) {
+    const posterCode = movie.mcode || movie.code;
+
     if (!seenMovies.has(movie.code)) {
       movies.push({
         providerMovieCode: movie.code,
@@ -158,7 +160,7 @@ export function parseTohoScheduleResponse(payload, requestedDate) {
         durationMinutes: movie.hours,
         ratingCode: movie.ratingCd || null,
         isNew: movie.newShow === '1' || movie.newShow === '2',
-        posterUrl: buildTohoPosterUrl(movie.code),
+        posterUrl: buildTohoPosterUrl(posterCode),
       });
       seenMovies.add(movie.code);
     }

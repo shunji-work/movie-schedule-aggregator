@@ -95,6 +95,23 @@ await run('parseTohoScheduleResponse normalizes movie and showtime data', async 
   });
 });
 
+await run('parseTohoScheduleResponse uses master movie code for poster URL', async () => {
+  const payload = JSON.parse(await fs.readFile('test/fixtures/toho-schedule.json', 'utf8'));
+  const movie = payload.data[0].list[0].list[0];
+
+  movie.code = '028738';
+  movie.mcode = '028267';
+
+  const parsed = parseTohoScheduleResponse(payload, '2026-03-19');
+
+  assert.equal(parsed.movies[0].providerMovieCode, '028738');
+  assert.equal(parsed.showtimes[0].movieCode, '028738');
+  assert.equal(
+    parsed.movies[0].posterUrl,
+    'https://hlo.tohotheater.jp/images_net/movie/028267/SAKUHIN028267_1.jpg'
+  );
+});
+
 await run('collectTohoSchedules aggregates theater, movie, and showtime records', async () => {
   const html = await fs.readFile('test/fixtures/toho-theaters.html', 'utf8');
   const payload = JSON.parse(await fs.readFile('test/fixtures/toho-schedule.json', 'utf8'));

@@ -23,6 +23,7 @@ export type Movie = {
   id: string;
   title: string;
   poster_url: string;
+  poster_urls?: string[];
   duration: number;
   genre: string;
   ranking?: number;

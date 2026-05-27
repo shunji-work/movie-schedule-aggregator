@@ -76,11 +76,11 @@ export function Timeline() {
             >
               <CardContent className="p-4">
                 <div className="flex flex-col gap-4 md:flex-row">
-                  <div className="h-28 w-20 overflow-hidden rounded-xl bg-slate-200">
+                  <div className="h-20 w-32 flex-none overflow-hidden rounded-xl bg-slate-200 md:h-24 md:w-40">
                     <PosterImage
-                      src={showtime.movie.poster_url}
+                      src={showtime.movie.poster_urls ?? showtime.movie.poster_url}
                       alt={showtime.movie.title}
-                      className="h-full w-full bg-slate-100 object-contain p-1.5"
+                      className="h-full w-full object-cover"
                     />
                   </div>
                   <div className="flex-1 space-y-3">

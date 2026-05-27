@@ -90,9 +90,53 @@ function getTokyoDateString() {
   }).format(new Date());
 }
 
+function normalizeMovieTitleForPoster(title: string) {
+  return title
+    .normalize('NFKC')
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\([^)]*$/g, '')
+    .replace(/【[^】]*】/g, '')
+    .replace(/\[[^\]]*\]/g, '')
+    .replace(/\s+/g, '')
+    .toLowerCase();
+}
+
+function pushUnique(target: string[], value: string) {
+  if (value && !target.includes(value)) {
+    target.push(value);
+  }
+}
+
+function buildPosterCandidateMap(movies: LiveCollectorMovie[]) {
+  const candidatesByTitle = new Map<string, string[]>();
+
+  for (const movie of movies) {
+    const key = normalizeMovieTitleForPoster(movie.title);
+    const candidates = candidatesByTitle.get(key) ?? [];
+    pushUnique(candidates, movie.posterUrl);
+    candidatesByTitle.set(key, candidates);
+  }
+
+  const candidatesByCode = new Map<string, string[]>();
+
+  for (const movie of movies) {
+    const ownCandidates: string[] = [];
+    pushUnique(ownCandidates, movie.posterUrl);
+
+    for (const candidate of candidatesByTitle.get(normalizeMovieTitleForPoster(movie.title)) ?? []) {
+      pushUnique(ownCandidates, candidate);
+    }
+
+    candidatesByCode.set(movie.providerMovieCode, ownCandidates);
+  }
+
+  return candidatesByCode;
+}
+
 function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
   const theaterMap = new Map<string, Theater>();
   const movieMap = new Map<string, Movie>();
+  const posterCandidatesByCode = buildPosterCandidateMap(snapshot.movies);
   const sourceMovieMap = new Map(
     snapshot.movies.map((movie) => [movie.providerMovieCode, movie])
   );
@@ -126,6 +170,7 @@ function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
       id: `toho-movie-${movie.providerMovieCode}`,
       title: movie.title,
       poster_url: movie.posterUrl,
+      poster_urls: posterCandidatesByCode.get(movie.providerMovieCode),
       duration: movie.durationMinutes,
       genre: movie.englishTitle || 'Movie',
       ranking: undefined,
@@ -144,6 +189,9 @@ function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
       id: `toho-movie-${showtime.movieCode}`,
       title: sourceMovie?.title || showtime.movieTitle,
       poster_url: sourceMovie?.posterUrl || '',
+      poster_urls: sourceMovie
+        ? posterCandidatesByCode.get(sourceMovie.providerMovieCode)
+        : undefined,
       duration: sourceMovie?.durationMinutes || 0,
       genre: sourceMovie?.englishTitle || 'Movie',
       ranking: undefined,

@@ -1,22 +1,36 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function getImageSources(src: string | string[]) {
+  const values = Array.isArray(src) ? src : [src];
+  return values.filter((value, index) => value && values.indexOf(value) === index);
+}
 
 function buildFallbackPoster(title: string) {
   const safeTitle = title.trim() || 'Movie';
-  const displayTitle = safeTitle.length > 28 ? `${safeTitle.slice(0, 28)}…` : safeTitle;
+  const displayTitle = safeTitle.length > 34 ? `${safeTitle.slice(0, 34)}…` : safeTitle;
+  const escapedTitle = escapeHtml(safeTitle);
+  const escapedDisplayTitle = escapeHtml(displayTitle);
   const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 480" role="img" aria-label="${safeTitle}">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" role="img" aria-label="${escapedTitle}">
       <defs>
         <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#e0f2fe" />
+          <stop offset="0%" stop-color="#dbeafe" />
           <stop offset="100%" stop-color="#e2e8f0" />
         </linearGradient>
       </defs>
-      <rect width="320" height="480" rx="28" fill="url(#bg)" />
-      <rect x="24" y="24" width="272" height="432" rx="22" fill="#ffffff" opacity="0.94" />
-      <text x="160" y="170" text-anchor="middle" font-size="26" font-family="sans-serif" fill="#0f172a">Now Showing</text>
-      <foreignObject x="42" y="210" width="236" height="170">
-        <div xmlns="http://www.w3.org/1999/xhtml" style="display:flex;height:100%;align-items:center;justify-content:center;text-align:center;font-family:sans-serif;font-size:24px;line-height:1.45;color:#1e293b;padding:0 8px;word-break:break-word;">
-          ${displayTitle}
+      <rect width="640" height="360" fill="url(#bg)" />
+      <text x="320" y="132" text-anchor="middle" font-size="32" font-family="sans-serif" fill="#0f172a">Now Showing</text>
+      <foreignObject x="96" y="160" width="448" height="118">
+        <div xmlns="http://www.w3.org/1999/xhtml" style="display:flex;height:100%;align-items:center;justify-content:center;text-align:center;font-family:sans-serif;font-size:30px;font-weight:700;line-height:1.35;color:#0f172a;padding:0 12px;word-break:break-word;">
+          ${escapedDisplayTitle}
         </div>
       </foreignObject>
     </svg>
@@ -26,17 +40,34 @@ function buildFallbackPoster(title: string) {
 }
 
 type PosterImageProps = {
-  src: string;
+  src: string | string[];
   alt: string;
   className?: string;
 };
 
 export function PosterImage({ src, alt, className }: PosterImageProps) {
-  const [currentSrc, setCurrentSrc] = useState(src || buildFallbackPoster(alt));
+  const sources = useMemo(() => getImageSources(src), [src]);
+  const sourceKey = sources.join('\n');
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentSrc, setCurrentSrc] = useState(sources[0] || buildFallbackPoster(alt));
 
   useEffect(() => {
-    setCurrentSrc(src || buildFallbackPoster(alt));
-  }, [alt, src]);
+    setCurrentIndex(0);
+    setCurrentSrc(sources[0] || buildFallbackPoster(alt));
+  }, [alt, sourceKey, sources]);
+
+  const handleError = () => {
+    const nextIndex = currentIndex + 1;
+    const nextSrc = sources[nextIndex];
+
+    if (nextSrc) {
+      setCurrentIndex(nextIndex);
+      setCurrentSrc(nextSrc);
+      return;
+    }
+
+    setCurrentSrc(buildFallbackPoster(alt));
+  };
 
   return (
     <img
@@ -46,7 +77,7 @@ export function PosterImage({ src, alt, className }: PosterImageProps) {
       decoding="async"
       referrerPolicy="no-referrer"
       className={className}
-      onError={() => setCurrentSrc(buildFallbackPoster(alt))}
+      onError={handleError}
     />
   );
 }
