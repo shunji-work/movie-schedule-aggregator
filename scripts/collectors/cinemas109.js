@@ -14,6 +14,28 @@ import {
 
 const CINEMAS109_BASE_URL = 'https://109cinemas.net';
 const CINEMAS109_HOME_URL = `${CINEMAS109_BASE_URL}/`;
+const CINEMAS109_LOCATION_OVERRIDES = {
+  tomiya: { latitude: 38.3598, longitude: 140.8824 },
+  premiumshinjuku: { latitude: 35.6957, longitude: 139.7006 },
+  sano: { latitude: 36.2939, longitude: 139.5964 },
+  shobu: { latitude: 36.0722, longitude: 139.6028 },
+  kiba: { latitude: 35.667, longitude: 139.8068 },
+  futakotamagawa: { latitude: 35.6115, longitude: 139.6264 },
+  grandberrypark: { latitude: 35.5115, longitude: 139.469 },
+  kohoku: { latitude: 35.5527, longitude: 139.5781 },
+  kawasaki: { latitude: 35.5312, longitude: 139.6967 },
+  shonan: { latitude: 35.3367, longitude: 139.4443 },
+  movil: { latitude: 35.4649, longitude: 139.6188 },
+  yumegaoka: { latitude: 35.4055, longitude: 139.4834 },
+  nagoya: { latitude: 35.1636, longitude: 136.884 },
+  yokkaichi: { latitude: 34.967, longitude: 136.6189 },
+  meiwa: { latitude: 34.5459, longitude: 136.6189 },
+  'osaka-expocity': { latitude: 34.8063, longitude: 135.5324 },
+  minoh: { latitude: 34.8338, longitude: 135.4902 },
+  hatkobe: { latitude: 34.704, longitude: 135.2162 },
+  hiroshima: { latitude: 34.3727, longitude: 132.3919 },
+  saga: { latitude: 33.2639, longitude: 130.3209 },
+};
 
 export function build109ScheduleUrl(theater, date) {
   return `${CINEMAS109_BASE_URL}/${theater.slug}/schedules/${toYmd(date)}.html?theater_code=${theater.ticketCode}`;
@@ -96,6 +118,7 @@ function parseJsonLdTheater(html) {
 
 export function parse109TheaterPage(html, theater) {
   const jsonLd = parseJsonLdTheater(html);
+  const location = CINEMAS109_LOCATION_OVERRIDES[theater.code] ?? null;
   const ticketCode =
     html.match(/theater_code=([A-Z0-9]+)/i)?.[1] ??
     html.match(/[?&]tsc=([A-Z0-9]+)/i)?.[1] ??
@@ -107,8 +130,8 @@ export function parse109TheaterPage(html, theater) {
     ticketCode,
     name: normalizeWhitespace(jsonLd.name) || theater.name,
     address: normalizeWhitespace(jsonLd.address),
-    latitude: null,
-    longitude: null,
+    latitude: location?.latitude ?? null,
+    longitude: location?.longitude ?? null,
   };
 }
 

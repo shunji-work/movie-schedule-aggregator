@@ -14,7 +14,10 @@ import {
   parseAeonScheduleResponse,
   parseAeonTheaterList,
 } from '../scripts/collectors/aeon.js';
-import { parse109ScheduleHtml } from '../scripts/collectors/cinemas109.js';
+import {
+  parse109ScheduleHtml,
+  parse109TheaterPage,
+} from '../scripts/collectors/cinemas109.js';
 import { collectAllSchedules } from '../scripts/collectors/index.js';
 import { parseSmtScheduleHtml } from '../scripts/collectors/smt.js';
 import { parseTjoyScheduleHtml } from '../scripts/collectors/tjoy.js';
@@ -324,6 +327,32 @@ await run('parse109ScheduleHtml normalizes schedule page data', async () => {
   assert.equal(parsed.movies[0].providerMovieCode, '51000');
   assert.equal(parsed.showtimes[0].endsAt, '2026-05-27T23:20:00+09:00');
   assert.equal(parsed.showtimes[0].bookingUrl, 'https://109cinemas.net/buy');
+});
+
+await run('parse109TheaterPage fills known theater coordinates', async () => {
+  const html = `
+    <script type="application/ld+json">
+      {
+        "@type": "MovieTheater",
+        "name": "１０９シネマズ二子玉川",
+        "address": {
+          "addressRegion": "東京都",
+          "addressLocality": "世田谷区",
+          "streetAddress": "玉川1-14-1"
+        }
+      }
+    </script>
+  `;
+  const parsed = parse109TheaterPage(html, {
+    code: 'futakotamagawa',
+    slug: 'futakotamagawa',
+    ticketCode: 'P0',
+    name: '109 Futako',
+  });
+
+  assert.equal(parsed.name, '１０９シネマズ二子玉川');
+  assert.equal(parsed.latitude, 35.6115);
+  assert.equal(parsed.longitude, 139.6264);
 });
 
 await run('parseSmtScheduleHtml normalizes generated schedule HTML', async () => {
