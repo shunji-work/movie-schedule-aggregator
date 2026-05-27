@@ -196,10 +196,12 @@ export function QuickWatch() {
       </div>
 
       {status === 'fallback' ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-500">
-          位置情報へのアクセスが許可されていません。ブラウザの設定から位置情報の使用を許可してください。
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          位置情報を取得できなかったため、東京駅周辺を基準に表示しています。正確な距離順で見るにはブラウザの位置情報を許可してください。
         </div>
-      ) : loading ? (
+      ) : null}
+
+      {loading ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-500">
           {status === 'detecting' ? '位置情報を取得中です。' : '上映情報を読み込み中です。'}
         </div>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getCurrentLocation, type Location } from '@/lib/geolocation';
+import { getCurrentLocation, getMockLocation, type Location } from '@/lib/geolocation';
 
 type LocationStatus = 'detecting' | 'live' | 'fallback';
 
@@ -24,6 +24,7 @@ export function useUserLocation() {
           return;
         }
 
+        setLocation(getMockLocation());
         setStatus('fallback');
       });
 
