@@ -4,7 +4,6 @@ import {
   createEmptySnapshot,
   durationTextToMinutes,
   fetchText,
-  getAttr,
   mapLimit,
   normalizeWhitespace,
   PROVIDER_CHAINS,
@@ -66,7 +65,7 @@ export function parseUnitedTheaterList(html) {
 export function parseUnitedTheaterMetadata(html, fallbackName = '') {
   const title = normalizeWhitespace(html.match(/<title>([\s\S]*?)<\/title>/i)?.[1] ?? '');
   const name =
-    title.match(/^(.+?)\s+映画\s+スケジュール/)?.[1] ??
+    title.match(/^(.+?)\s+\u6620\u753B\s+\u30B9\u30B1\u30B8\u30E5\u30FC\u30EB/)?.[1] ??
     title.match(/^(.+?)\s*\|/)?.[1] ??
     fallbackName;
   const mapHref = html.match(/href=["']([^"']*google\.[^"']*maps[^"']*)["']/i)?.[1] ?? '';
@@ -92,6 +91,22 @@ function parseScreenName(screenBlock) {
   }
 
   return normalizeWhitespace(screenBlock.match(/<p class="screenNumber">([\s\S]*?)<\/p>/i)?.[1] ?? '');
+}
+
+function extractUnitedBookingUrl(slotHtml, theaterCode) {
+  const bookingHref =
+    slotHtml.match(/<li\b[^>]*class=["'][^"']*uolIcon[^"']*["'][\s\S]*?<a\b[^>]+href=["']([^"']+)/i)?.[1] ??
+    slotHtml.match(/<a\b[^>]+href=["']([^"']*\/all\/cc\.php[^"']*)/i)?.[1] ??
+    '';
+
+  return absoluteUrl(bookingHref, `${UNITED_BASE_URL}/${theaterCode}/`);
+}
+
+function extractUnitedSeatStatus(slotHtml) {
+  return normalizeWhitespace(
+    slotHtml.match(/<li\b[^>]*class=["'][^"']*uolIcon[^"']*["'][\s\S]*?<img\b[^>]+alt=["']([^"']+)["']/i)?.[1] ??
+      ''
+  ) || null;
 }
 
 export function parseUnitedScheduleHtml(html, theater, requestedDate) {
@@ -135,10 +150,15 @@ export function parseUnitedScheduleHtml(html, theater, requestedDate) {
       const screenBlock = movieBlock.slice(startIndex, endIndex);
       const screenName = parseScreenName(screenBlock);
       const screenCode = screenName.match(/\d+/)?.[0] ?? `${index + 1}`;
+      const timeMatches = [...screenBlock.matchAll(
+        /<li class="startTime">([^<]+)<\/li>\s*<li class="endTime">(?:[~\u301C\uFF5E]|&#65374;)?([^<]+)<\/li>/gi
+      )];
 
-      for (const timeMatch of screenBlock.matchAll(
-        /<li class="startTime">([^<]+)<\/li>\s*<li class="endTime">(?:～|~|&#65374;)?([^<]+)<\/li>/gi
-      )) {
+      for (let timeIndex = 0; timeIndex < timeMatches.length; timeIndex += 1) {
+        const timeMatch = timeMatches[timeIndex];
+        const slotStart = timeMatch.index ?? 0;
+        const slotEnd = timeMatches[timeIndex + 1]?.index ?? screenBlock.length;
+        const slotHtml = screenBlock.slice(slotStart, slotEnd);
         const startsAt = buildJstDateTime(requestedDate, normalizeWhitespace(timeMatch[1]));
         const endsAt = buildJstDateTime(requestedDate, normalizeWhitespace(timeMatch[2]));
 
@@ -152,10 +172,10 @@ export function parseUnitedScheduleHtml(html, theater, requestedDate) {
           screenName,
           startsAt,
           endsAt,
-          seatStatus: null,
-          isLateShow: /late|レイト/i.test(screenBlock),
+          seatStatus: extractUnitedSeatStatus(slotHtml),
+          isLateShow: /late|\u30EC\u30A4\u30C8/i.test(screenBlock),
           bookingCode: `${movieCode}-${screenCode}-${startsAt}`,
-          bookingUrl: absoluteUrl(getAttr(screenBlock, 'href'), `${UNITED_BASE_URL}/${theater.code}/`),
+          bookingUrl: extractUnitedBookingUrl(slotHtml, theater.code),
         });
       }
     }

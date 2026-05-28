@@ -303,8 +303,9 @@ await run('parseUnitedScheduleHtml normalizes movie and showtime data', async ()
     <ul id="dailyList">
       <li class="clearfix">
         <h3><span class="movieTitle"><a href="film.php?film=21596">Shared Movie</a></span></h3>
-        <ul class="tl"><li><p class="screenNumber"><img alt="9screen"></p>
+        <ul class="tl"><li><p class="screenNumber"><a href="seat/09.html"><img alt="9screen"></a></p>
           <ol><li><div><ol><li class="startTime">10:15</li><li class="endTime">~12:27</li></ol></div></li></ol>
+          <ul><li class="uolIcon"><a href="/all/cc.php?tc=018&amp;sd=20260527&amp;sc=009&amp;st=20260527101500&amp;mc=21596"><img alt="[○]"></a></li></ul>
         </li></ul>
       </li>
     </ul>
@@ -314,6 +315,11 @@ await run('parseUnitedScheduleHtml normalizes movie and showtime data', async ()
   assert.equal(parsed.movies[0].providerMovieCode, '21596');
   assert.equal(parsed.showtimes[0].screenCode, '9');
   assert.equal(parsed.showtimes[0].startsAt, '2026-05-27T10:15:00+09:00');
+  assert.equal(parsed.showtimes[0].seatStatus, '[○]');
+  assert.equal(
+    parsed.showtimes[0].bookingUrl,
+    'https://www.unitedcinemas.jp/all/cc.php?tc=018&sd=20260527&sc=009&st=20260527101500&mc=21596'
+  );
 });
 
 await run('parseUnitedTheaterList extracts theater paths', async () => {
