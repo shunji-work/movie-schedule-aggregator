@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Award,
   Clock3,
+  ExternalLink,
   MapPin,
   Navigation,
   Sparkles,
+  Ticket,
   TrendingUp,
   Zap,
 } from 'lucide-react';
@@ -14,6 +16,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { PosterImage } from '@/components/PosterImage';
 import {
   compareQuickWatchShowtimes,
+  enrichShowtimesWithExternalRatings,
   listQuickWatchShowtimes,
   type ShowtimeWithDetails,
 } from '@/lib/app-data';
@@ -59,6 +62,12 @@ export function QuickWatch() {
       .then((items) => {
         if (!cancelled) {
           setShowtimes(items);
+
+          enrichShowtimesWithExternalRatings(items).then((enriched) => {
+            if (!cancelled) {
+              setShowtimes(enriched);
+            }
+          });
         }
       })
       .finally(() => {
@@ -224,23 +233,36 @@ export function QuickWatch() {
               >
                 <CardContent className="p-4">
                   <div className="flex flex-col gap-4 md:flex-row">
-                    <div className="h-24 w-40 flex-none overflow-hidden rounded-xl bg-slate-200 md:h-28 md:w-48">
+                    <div className="relative h-24 w-40 flex-none overflow-hidden rounded-xl bg-slate-200 md:h-28 md:w-48">
                       <PosterImage
                         src={showtime.movie.poster_urls ?? showtime.movie.poster_url}
                         alt={showtime.movie.title}
                         className="h-full w-full object-cover"
                       />
+                      {showtime.movie.rating ? (
+                        <div className="absolute right-2 top-2 rounded-full bg-slate-950/85 px-2.5 py-1 text-xs font-semibold text-white shadow">
+                          ★ {showtime.movie.rating.toFixed(1)}
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="flex-1 space-y-3">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
-                          <h3 className="text-xl font-bold text-slate-900">
-                            {showtime.movie.title}
-                          </h3>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-xl font-bold text-slate-900">
+                              {showtime.movie.title}
+                            </h3>
+                            <Badge variant="outline" className="border-slate-300 text-slate-700">
+                              {showtime.movie_version ?? '通常'}
+                            </Badge>
+                          </div>
                           <p className="text-sm text-slate-500">
                             {showtime.movie.genre} ・ {showtime.movie.duration}分
                           </p>
+                          {showtime.raw_movie_title && showtime.raw_movie_title !== showtime.movie.title ? (
+                            <p className="text-xs text-slate-500">{showtime.raw_movie_title}</p>
+                          ) : null}
                         </div>
                         <Badge className={`${getTheaterChainColor(showtime.theater.chain)} text-white`}>
                           {showtime.theater.chain}
@@ -257,6 +279,7 @@ export function QuickWatch() {
                         {showtime.movie.rating ? (
                           <Badge variant="outline" className="border-slate-300 text-slate-700">
                             ★ {showtime.movie.rating.toFixed(1)}
+                            {showtime.movie.rating_source ? ` ${showtime.movie.rating_source}` : null}
                           </Badge>
                         ) : null}
                         {showtime.movie.ranking ? (
@@ -284,6 +307,16 @@ export function QuickWatch() {
                           <span>スクリーン {showtime.screen}</span>
                         </div>
                       </div>
+
+                      {showtime.booking_url ? (
+                        <Button asChild size="sm">
+                          <a href={showtime.booking_url} target="_blank" rel="noreferrer">
+                            <Ticket className="mr-2 h-4 w-4" />
+                            予約画面へ
+                            <ExternalLink className="ml-2 h-3 w-3" />
+                          </a>
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                 </CardContent>

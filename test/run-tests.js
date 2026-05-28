@@ -25,6 +25,10 @@ import {
   parseUnitedScheduleHtml,
   parseUnitedTheaterList,
 } from '../scripts/collectors/united.js';
+import {
+  normalizeRatingTitle,
+  parseFilmarksSearchHtml,
+} from '../scripts/ratings/filmarks.js';
 
 async function run(name, fn) {
   try {
@@ -416,6 +420,30 @@ await run('parseTjoyScheduleHtml normalizes theater schedule cards', async () =>
   assert.equal(parsed.showtimes[0].bookingUrl, 'https://tjoy.jp/wald/reservation/index/1/O2412000/9/2026-05-27?type=film');
 });
 
+await run('parseFilmarksSearchHtml extracts matching rating results', async () => {
+  const html = `
+    <main>
+      <div class="p-content-cassette">
+        <a href="/movies/100">
+          <h3 class="p-content-cassette__title">Other Movie</h3>
+          <div class="c-rating__score">3.1</div>
+        </a>
+      </div>
+      <div class="p-content-cassette">
+        <a href="/movies/200">
+          <h3 class="p-content-cassette__title">Shared Movie</h3>
+          <div class="c-rating__score">4.4</div>
+        </a>
+      </div>
+    </main>
+  `;
+  const parsed = parseFilmarksSearchHtml(html, 'Shared Movie \u5B57\u5E55\u7248');
+
+  assert.equal(parsed.rating, 4.4);
+  assert.equal(parsed.url, 'https://filmarks.com/movies/200');
+  assert.equal(normalizeRatingTitle('\u6620\u753B\u300CShared Movie\u300D\u5B57\u5E55\u7248'), 'sharedmovie');
+});
+
 await run('collectAllSchedules keeps partial results when a provider fails', async () => {
   const html = await fs.readFile('test/fixtures/toho-theaters.html', 'utf8');
   const payload = JSON.parse(await fs.readFile('test/fixtures/toho-schedule.json', 'utf8'));
@@ -467,9 +495,11 @@ await run('normalizeLiveSnapshot dedupes same-title movies across providers', as
       NEARBY_THEATER_RADIUS_KM,
       QUICKWATCH_DISTANCE_TIE_KM,
       compareQuickWatchShowtimes,
+      getMovieVersionLabel,
       hasKnownTheaterLocation,
       isWithinNearbyRadius,
       normalizeLiveSnapshot,
+      sortMoviesByRating,
     } = await vite.ssrLoadModule('/src/lib/app-data.ts');
 
     assert.ok(LIVE_SCHEDULES_TIMEOUT_MS >= 60_000);
@@ -480,6 +510,17 @@ await run('normalizeLiveSnapshot dedupes same-title movies across providers', as
     assert.equal(isWithinNearbyRadius(20), true);
     assert.equal(isWithinNearbyRadius(20.01), false);
     assert.equal(isWithinNearbyRadius(null), false);
+    assert.equal(getMovieVersionLabel('Shared Movie \u5B57\u5E55\u7248'), '\u5B57\u5E55');
+    assert.equal(getMovieVersionLabel('Shared Movie \u5439\u66FF\u7248'), '\u5439\u66FF');
+    assert.equal(getMovieVersionLabel('Shared Movie'), '\u901A\u5E38');
+    assert.deepEqual(
+      sortMoviesByRating([
+        { id: 'low', title: 'Low', rating: 3.8, ranking: 1 },
+        { id: 'high', title: 'High', rating: 4.6, ranking: 20 },
+        { id: 'none', title: 'None', ranking: 2 },
+      ]).map((movie) => movie.id),
+      ['high', 'low', 'none']
+    );
 
     const normalized = normalizeLiveSnapshot({
       provider: 'all',
@@ -491,7 +532,7 @@ await run('normalizeLiveSnapshot dedupes same-title movies across providers', as
           englishName: '',
           provider: 'toho',
           chain: 'TOHO Cinemas',
-          scheduleUrl: '',
+          scheduleUrl: 'https://example.test/toho/001',
           latitude: 35.6745,
           longitude: 139.7596,
           address: '',
@@ -502,7 +543,7 @@ await run('normalizeLiveSnapshot dedupes same-title movies across providers', as
           englishName: '',
           provider: 'aeon',
           chain: 'AEON Cinema',
-          scheduleUrl: '',
+          scheduleUrl: 'https://example.test/aeon/001',
           latitude: null,
           longitude: null,
           address: '',
@@ -546,6 +587,7 @@ await run('normalizeLiveSnapshot dedupes same-title movies across providers', as
           seatStatus: null,
           isLateShow: false,
           bookingCode: 'toho-1',
+          bookingUrl: 'https://example.test/toho/book',
         },
         {
           provider: 'aeon',
@@ -560,6 +602,7 @@ await run('normalizeLiveSnapshot dedupes same-title movies across providers', as
           seatStatus: null,
           isLateShow: false,
           bookingCode: 'aeon-1',
+          bookingUrl: 'https://example.test/aeon/book',
         },
       ],
     });
@@ -579,10 +622,17 @@ await run('normalizeLiveSnapshot dedupes same-title movies across providers', as
       new Set(normalized.theaters.map((theater) => theater.id)),
       new Set(['toho-theater-001', 'aeon-theater-001'])
     );
+    assert.equal(
+      normalized.theaters.find((theater) => theater.id === 'toho-theater-001').website_url,
+      'https://example.test/toho/001'
+    );
     assert.deepEqual(
       new Set(normalized.showtimes.map((showtime) => showtime.movie_id)),
       new Set([normalized.movies[0].id])
     );
+    assert.equal(normalized.showtimes[0].booking_url, 'https://example.test/toho/book');
+    assert.equal(normalized.showtimes[0].movie_version, '\u901A\u5E38');
+    assert.equal(normalized.showtimes[0].raw_movie_title, 'Shared Movie');
     assert.deepEqual(normalized.movies[0].poster_urls, [
       'https://example.test/toho.jpg',
       'https://example.test/aeon.jpg',

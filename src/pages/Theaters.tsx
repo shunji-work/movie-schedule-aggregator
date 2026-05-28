@@ -93,7 +93,19 @@ export function Theaters() {
                         <Badge className={`${getTheaterChainColor(theater.chain)} text-white`}>
                           {theater.chain}
                         </Badge>
-                        <h3 className="text-xl font-semibold text-slate-900">{theater.name}</h3>
+                        {theater.website_url ? (
+                          <a
+                            href={theater.website_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center text-xl font-semibold text-slate-900 transition hover:text-slate-600"
+                          >
+                            {theater.name}
+                            <ExternalLink className="ml-2 h-4 w-4" />
+                          </a>
+                        ) : (
+                          <h3 className="text-xl font-semibold text-slate-900">{theater.name}</h3>
+                        )}
                         {theater.isFavorite ? (
                           <Badge variant="outline" className="border-rose-200 text-rose-600">
                             お気に入り
@@ -139,6 +151,14 @@ export function Theaters() {
                           地図で開く
                         </a>
                       </Button>
+                      {theater.website_url ? (
+                        <Button asChild>
+                          <a href={theater.website_url} target="_blank" rel="noreferrer">
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            公式サイト
+                          </a>
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                 </CardContent>

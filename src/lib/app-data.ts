@@ -27,6 +27,9 @@ export type WatchedMovieWithDetails = UserWatchedMovie & {
 
 const FAVORITES_KEY = 'movie-schedule.favorite-theaters';
 const WATCHED_KEY = 'movie-schedule.watched-movies';
+const RATINGS_CACHE_KEY = 'movie-schedule.external-ratings.v1';
+const RATINGS_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const RATINGS_BATCH_SIZE = 20;
 export const LIVE_SCHEDULES_TIMEOUT_MS = 75_000;
 export const LIVE_TOHO_FALLBACK_TIMEOUT_MS = 15_000;
 export const NEARBY_THEATER_RADIUS_KM = 20;
@@ -87,6 +90,21 @@ type LiveCollectorSnapshot = {
   errors?: Array<{ provider: string; message: string; theaterCode?: string }>;
 };
 
+type ExternalMovieRating = {
+  title: string;
+  rating: number;
+  source: string;
+  url?: string;
+};
+
+type RatingCacheEntry = ExternalMovieRating & {
+  cachedAt: number;
+};
+
+type RatingsApiResponse = {
+  ratings?: Array<ExternalMovieRating & { error?: string; matchedTitle?: string }>;
+};
+
 let liveSnapshotPromise:
   | Promise<{
       movies: Movie[];
@@ -142,6 +160,20 @@ function normalizeMovieTitleForDisplay(title: string) {
     .replace(/^[\s\u3000・･／/:：,，、。"'“”‘’『』「」&＆\-‐‑‒–—―_+＋=＝~〜～]+/g, '')
     .replace(/[\s\u3000・･／/:：,，、。"'“”‘’『』「」&＆\-‐‑‒–—―_+＋=＝~〜～]+$/g, '')
     .trim();
+}
+
+export function getMovieVersionLabel(title: string) {
+  const normalized = title.normalize('NFKC');
+
+  if (/(?:\u5439\u66FF\u7248?|\u65E5\u672C\u8A9E\u7248?|dub(?:bed)?)/i.test(normalized)) {
+    return '\u5439\u66FF';
+  }
+
+  if (/(?:\u5B57\u5E55\u7248?|\u82F1\u8A9E\u7248?|sub(?:title)?)/i.test(normalized)) {
+    return '\u5B57\u5E55';
+  }
+
+  return '\u901A\u5E38';
 }
 
 function pushUnique(target: string[], value: string) {
@@ -320,6 +352,7 @@ export function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
       latitude: hasLocation ? theater.latitude! : FALLBACK_THEATER_LOCATION.latitude,
       longitude: hasLocation ? theater.longitude! : FALLBACK_THEATER_LOCATION.longitude,
       has_location: hasLocation,
+      website_url: theater.scheduleUrl,
       address: theater.address || theater.name,
       created_at: new Date().toISOString(),
     });
@@ -421,7 +454,7 @@ export function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
   );
 
   const showtimes = snapshot.showtimes
-    .map((showtime) => {
+    .map((showtime): ShowtimeWithDetails | null => {
       const sourceKey = buildSourceKey(showtime.provider, showtime.movieCode);
       const normalizedTitleKey = normalizeMovieTitleForPoster(showtime.movieTitle);
       const titleKey =
@@ -443,6 +476,9 @@ export function normalizeLiveSnapshot(snapshot: LiveCollectorSnapshot) {
         movie_id: movie.id,
         showtime: showtime.startsAt,
         screen: showtime.screenName || showtime.screenCode,
+        booking_url: showtime.bookingUrl,
+        movie_version: getMovieVersionLabel(showtime.movieTitle),
+        raw_movie_title: showtime.movieTitle,
         created_at: new Date().toISOString(),
         movie,
         theater,
@@ -803,6 +839,141 @@ function setStorageItem<T>(key: string, value: T) {
   window.localStorage.setItem(key, JSON.stringify(value));
 }
 
+function normalizeRatingLookupTitle(title: string) {
+  return title
+    .normalize('NFKC')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[\uFF08][^\uFF09]*[\uFF09]/g, ' ')
+    .replace(/[\u3010][^\u3011]*[\u3011]/g, ' ')
+    .replace(/[\u300E\u300F\u300C\u300D]/g, ' ')
+    .replace(/^\s*\u6620\u753B(?=\s|[\u300E\u300F\u300C\u300D])/g, ' ')
+    .replace(/^\s*\u5287\u5834\u7248\s*/g, ' ')
+    .replace(MOVIE_FORMAT_TOKEN_PATTERN, ' ')
+    .replace(/(?:\u5B57\u5E55\u7248?|\u5439\u66FF\u7248?|\u65E5\u672C\u8A9E\u7248?|\u82F1\u8A9E\u7248?)/g, ' ')
+    .replace(/[\s\u3000\u30FB\uFF65\uFF0F/:・、。'"\-+]+/g, '')
+    .toLowerCase();
+}
+
+function isFreshRating(entry: RatingCacheEntry | undefined, now = Date.now()) {
+  return Boolean(entry && now - entry.cachedAt < RATINGS_CACHE_TTL_MS);
+}
+
+async function fetchExternalRatings(titles: string[]) {
+  if (typeof window === 'undefined' || !titles.length) {
+    return [];
+  }
+
+  const ratings: ExternalMovieRating[] = [];
+
+  for (let index = 0; index < titles.length; index += RATINGS_BATCH_SIZE) {
+    const chunk = titles.slice(index, index + RATINGS_BATCH_SIZE);
+
+    try {
+      const response = await fetch(
+        `/api/ratings?titles=${encodeURIComponent(JSON.stringify(chunk))}`,
+        { headers: { accept: 'application/json' } }
+      );
+
+      if (!response.ok) {
+        continue;
+      }
+
+      const payload = (await response.json()) as RatingsApiResponse;
+      for (const rating of payload.ratings ?? []) {
+        if (rating.error || typeof rating.rating !== 'number' || !Number.isFinite(rating.rating)) {
+          continue;
+        }
+
+        ratings.push({
+          title: rating.title,
+          rating: rating.rating,
+          source: rating.source,
+          url: rating.url,
+        });
+      }
+    } catch {
+      // Ratings are enhancement-only; schedules should stay usable if this fails.
+    }
+  }
+
+  return ratings;
+}
+
+export function sortMoviesByRating(movies: Movie[]) {
+  return [...movies].sort((a, b) => {
+    const aRating = typeof a.rating === 'number' && Number.isFinite(a.rating) ? a.rating : null;
+    const bRating = typeof b.rating === 'number' && Number.isFinite(b.rating) ? b.rating : null;
+
+    if (aRating !== null || bRating !== null) {
+      const ratingDelta = (bRating ?? -1) - (aRating ?? -1);
+      if (ratingDelta !== 0) {
+        return ratingDelta;
+      }
+    }
+
+    const rankingDelta = (a.ranking ?? 999) - (b.ranking ?? 999);
+    if (rankingDelta !== 0) {
+      return rankingDelta;
+    }
+
+    return a.title.localeCompare(b.title, 'ja');
+  });
+}
+
+export async function enrichMoviesWithExternalRatings(movies: Movie[]): Promise<Movie[]> {
+  if (typeof window === 'undefined' || !movies.length) {
+    return sortMoviesByRating(movies);
+  }
+
+  const now = Date.now();
+  const cache = getStorageItem<Record<string, RatingCacheEntry>>(RATINGS_CACHE_KEY, {});
+  const uniqueTitles = [...new Set(movies.map((movie) => movie.title.trim()).filter(Boolean))];
+  const missingTitles = uniqueTitles.filter((title) => !isFreshRating(cache[normalizeRatingLookupTitle(title)], now));
+  const fetchedRatings = await fetchExternalRatings(missingTitles);
+  const nextCache = { ...cache };
+
+  for (const rating of fetchedRatings) {
+    nextCache[normalizeRatingLookupTitle(rating.title)] = {
+      ...rating,
+      cachedAt: now,
+    };
+  }
+
+  if (fetchedRatings.length) {
+    setStorageItem(RATINGS_CACHE_KEY, nextCache);
+  }
+
+  return sortMoviesByRating(
+    movies.map((movie) => {
+      const externalRating = nextCache[normalizeRatingLookupTitle(movie.title)];
+      if (!isFreshRating(externalRating, now)) {
+        return movie;
+      }
+
+      return {
+        ...movie,
+        rating: externalRating.rating,
+        rating_source: externalRating.source,
+        rating_url: externalRating.url,
+      };
+    })
+  );
+}
+
+export async function enrichShowtimesWithExternalRatings(
+  showtimes: ShowtimeWithDetails[]
+): Promise<ShowtimeWithDetails[]> {
+  const movies = await enrichMoviesWithExternalRatings(
+    [...new Map(showtimes.map((showtime) => [showtime.movie.id, showtime.movie])).values()]
+  );
+  const movieById = new Map(movies.map((movie) => [movie.id, movie]));
+
+  return showtimes.map((showtime) => ({
+    ...showtime,
+    movie: movieById.get(showtime.movie.id) ?? showtime.movie,
+  }));
+}
+
 async function fetchRemoteShowtimes(): Promise<ShowtimeWithDetails[] | null> {
   if (!supabase) {
     return null;
@@ -879,16 +1050,16 @@ export async function listShowtimesWithDetails(): Promise<ShowtimeWithDetails[]>
 export async function listMovies(): Promise<Movie[]> {
   const live = await getLiveSnapshot();
   if (live?.movies.length) {
-    return live.movies;
+    return sortMoviesByRating(live.movies);
   }
 
   const remote = await fetchRemoteMovies();
 
   if (remote) {
-    return remote;
+    return sortMoviesByRating(remote);
   }
 
-  return [...DEMO_MOVIES].sort((a, b) => (a.ranking ?? 999) - (b.ranking ?? 999));
+  return sortMoviesByRating(DEMO_MOVIES);
 }
 
 export async function listTheaters(): Promise<Theater[]> {

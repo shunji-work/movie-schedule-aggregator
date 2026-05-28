@@ -16,6 +16,7 @@ export type Theater = {
   latitude: number;
   longitude: number;
   has_location?: boolean;
+  website_url?: string;
   address: string;
   created_at: string;
 };
@@ -29,6 +30,8 @@ export type Movie = {
   genre: string;
   ranking?: number;
   rating?: number;
+  rating_source?: string;
+  rating_url?: string;
   created_at: string;
 };
 
@@ -38,6 +41,9 @@ export type Showtime = {
   movie_id: string;
   showtime: string;
   screen: string;
+  booking_url?: string;
+  movie_version?: string;
+  raw_movie_title?: string;
   created_at: string;
 };
 
